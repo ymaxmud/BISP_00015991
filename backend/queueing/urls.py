@@ -1,0 +1,12 @@
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+
+from . import views
+
+router = DefaultRouter()
+router.register(r'intake-forms', views.IntakeFormViewSet, basename='intake-form')
+router.register(r'tickets', views.QueueTicketViewSet, basename='queue-ticket')
+
+urlpatterns = [
+    path('', include(router.urls)),
+]
