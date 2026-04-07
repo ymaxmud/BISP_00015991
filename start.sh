@@ -7,6 +7,11 @@ set -e
 export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PYTHON_BIN="python3"
+
+if [ -x "$PROJECT_DIR/.venv/bin/python3" ]; then
+  PYTHON_BIN="$PROJECT_DIR/.venv/bin/python3"
+fi
 
 echo "🏥 Starting Avicenna Platform..."
 echo "================================"
@@ -21,13 +26,13 @@ sleep 1
 # Start Django Backend
 echo "→ Starting Django backend on port 8000..."
 cd "$PROJECT_DIR/backend"
-python3 manage.py runserver 8000 > /tmp/avicenna-django.log 2>&1 &
+"$PYTHON_BIN" manage.py runserver 8000 > /tmp/avicenna-django.log 2>&1 &
 DJANGO_PID=$!
 
 # Start FastAPI AI Service
 echo "→ Starting AI service on port 8001..."
 cd "$PROJECT_DIR/ai-service"
-python3 -m uvicorn app.main:app --port 8001 > /tmp/avicenna-fastapi.log 2>&1 &
+"$PYTHON_BIN" -m uvicorn app.main:app --port 8001 > /tmp/avicenna-fastapi.log 2>&1 &
 FASTAPI_PID=$!
 
 # Start Next.js Frontend
