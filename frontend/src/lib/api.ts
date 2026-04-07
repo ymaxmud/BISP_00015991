@@ -1,5 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-const AI_BASE = process.env.NEXT_PUBLIC_AI_URL || "http://localhost:8001/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
+const AI_BASE = process.env.NEXT_PUBLIC_AI_URL || "/api/ai";
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
