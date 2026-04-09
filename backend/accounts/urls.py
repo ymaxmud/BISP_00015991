@@ -14,6 +14,7 @@ urlpatterns = [
     path('register/doctor/', DoctorRegistrationView.as_view(), name='register-doctor'),
     path('register/clinic/', ClinicAdminRegistrationView.as_view(), name='register-clinic'),
     path('login/', views.LoginView.as_view(), name='login'),
+    path('supabase/sync/', views.SupabaseSyncView.as_view(), name='supabase-sync'),
     path('me/', views.MeView.as_view(), name='me'),
     path('users/', views.UserListView.as_view(), name='user-list'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
