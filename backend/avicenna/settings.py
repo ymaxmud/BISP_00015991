@@ -1,18 +1,51 @@
 """
 Django settings for avicenna project.
+
+All secrets and environment-specific values come from environment variables
+(see `.env.example`). python-dotenv loads `.env` automatically in dev.
 """
 
 from datetime import timedelta
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = BASE_DIR.parent
 
-SECRET_KEY = 'django-insecure-k-lb^1t)_p_@^3vfqun*wf6&e5rj2z4gccul6*2$6e)-9a!ikp'
+# Load .env files (project root wins, backend-local is fallback)
+load_dotenv(PROJECT_ROOT / '.env')
+load_dotenv(BASE_DIR / '.env')
 
-DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _env_list(name: str, default: str = '') -> list[str]:
+    raw = os.getenv(name, default)
+    return [item.strip() for item in raw.split(',') if item.strip()]
+
+
+# ---------------------------------------------------------------------------
+# Core security
+# ---------------------------------------------------------------------------
+SECRET_KEY = os.getenv(
+    'DJANGO_SECRET_KEY',
+    # Fallback only for first-time local setup. Production MUST override.
+    'dev-only-insecure-change-me-' + 'x' * 32,
+)
+
+DEBUG = _env_bool('DJANGO_DEBUG', default=True)
+
+ALLOWED_HOSTS = _env_list(
+    'DJANGO_ALLOWED_HOSTS',
+    default='localhost,127.0.0.1,0.0.0.0',
+)
 
 # ---------------------------------------------------------------------------
 # Application definition
@@ -43,6 +76,7 @@ INSTALLED_APPS = [
     'uploads',
     'analytics',
     'triage',
+    'billing',
 ]
 
 MIDDLEWARE = [
@@ -77,14 +111,28 @@ TEMPLATES = [
 WSGI_APPLICATION = 'avicenna.wsgi.application'
 
 # ---------------------------------------------------------------------------
-# Database
+# Database — prefer Postgres via DATABASE_URL / POSTGRES_* env vars, fall back
+# to SQLite for local development.
 # ---------------------------------------------------------------------------
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+_postgres_db = os.getenv('POSTGRES_DB')
+if _postgres_db:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': _postgres_db,
+            'USER': os.getenv('POSTGRES_USER', 'postgres'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+            'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -128,15 +176,17 @@ SIMPLE_JWT = {
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
-cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000')
-CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(',') if origin.strip()]
+CORS_ALLOWED_ORIGINS = _env_list(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:3000,http://127.0.0.1:3000',
+)
 CORS_ALLOW_CREDENTIALS = True
 
 # ---------------------------------------------------------------------------
 # Internationalization
 # ---------------------------------------------------------------------------
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Tashkent'
+TIME_ZONE = os.getenv('DJANGO_TIME_ZONE', 'Asia/Tashkent')
 USE_I18N = True
 USE_TZ = True
 
@@ -148,6 +198,11 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# ---------------------------------------------------------------------------
+# External service URLs
+# ---------------------------------------------------------------------------
+AI_SERVICE_URL = os.getenv('AI_SERVICE_URL', 'http://127.0.0.1:8001')
 
 # ---------------------------------------------------------------------------
 # Default primary key

@@ -35,6 +35,21 @@ export const auth = {
       `${API_BASE}/auth/register/`,
       { method: "POST", body: JSON.stringify(data) }
     ),
+  registerPatient: (data: Record<string, unknown>) =>
+    request<{ access: string; refresh: string; user: any }>(
+      `${API_BASE}/auth/register/patient/`,
+      { method: "POST", body: JSON.stringify(data) }
+    ),
+  registerDoctor: (data: Record<string, unknown>) =>
+    request<{ access: string; refresh: string; user: any }>(
+      `${API_BASE}/auth/register/doctor/`,
+      { method: "POST", body: JSON.stringify(data) }
+    ),
+  registerClinic: (data: Record<string, unknown>) =>
+    request<{ access: string; refresh: string; user: any }>(
+      `${API_BASE}/auth/register/clinic/`,
+      { method: "POST", body: JSON.stringify(data) }
+    ),
   login: (data: { email: string; password: string }) =>
     request<{ access: string; refresh: string; user: any }>(
       `${API_BASE}/auth/login/`,
@@ -53,13 +68,48 @@ export const auth = {
       method: "POST",
       body: JSON.stringify({ refresh }),
     }),
+  listUsers: (params?: string) =>
+    request<any>(
+      `${API_BASE}/auth/users/${params ? `?${params}` : ""}`
+    ),
+};
+
+// Billing
+export const billing = {
+  listPlans: () =>
+    request<any>(`${API_BASE}/billing/plans/`),
+  mySubscription: () =>
+    request<any>(`${API_BASE}/billing/me/`),
 };
 
 // Doctors
 export const doctors = {
   list: (params?: string) =>
-    request<any[]>(`${API_BASE}/doctors/${params ? `?${params}` : ""}`),
+    request<any>(`${API_BASE}/doctors/${params ? `?${params}` : ""}`),
   get: (slug: string) => request<any>(`${API_BASE}/doctors/${slug}/`),
+  adminAdd: async (data: FormData | Record<string, unknown>) => {
+    const token = getToken();
+    const headers: Record<string, string> = token
+      ? { Authorization: `Bearer ${token}` }
+      : {};
+    let body: FormData | string;
+    if (data instanceof FormData) {
+      body = data;
+    } else {
+      headers["Content-Type"] = "application/json";
+      body = JSON.stringify(data);
+    }
+    const res = await fetch(`${API_BASE}/doctors/admin/add/`, {
+      method: "POST",
+      headers,
+      body,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(json.detail || JSON.stringify(json) || res.statusText);
+    }
+    return json;
+  },
 };
 
 // Organizations

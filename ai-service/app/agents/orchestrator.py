@@ -1,18 +1,29 @@
 """
 Case Orchestrator — runs all agents and merges their outputs into a single
 unified CaseAnalysisResponse for the doctor.
-"""
 
-from app.agents.intake_summary_agent import IntakeSummaryAgent
-from app.agents.risk_triage_agent import RiskTriageAgent
-from app.agents.medication_safety_agent import MedicationSafetyAgent
+Each agent is wrapped in a try/except so that a single misbehaving agent
+cannot crash the whole analysis. When an agent fails, its section is marked
+as "unavailable" and a safety alert is appended so the doctor notices.
+"""
+from __future__ import annotations
+
+import logging
+
 from app.agents.guideline_support_agent import GuidelineSupportAgent
+from app.agents.intake_summary_agent import IntakeSummaryAgent
+from app.agents.medication_safety_agent import MedicationSafetyAgent
+from app.agents.risk_triage_agent import RiskTriageAgent
 from app.schemas.case_analysis import CaseAnalysisRequest, CaseAnalysisResponse
 from app.schemas.triage import IntakeSummaryRequest
+
+logger = logging.getLogger(__name__)
 
 
 class CaseOrchestrator:
     """Coordinates all AI agents and produces a merged analysis."""
+
+    RISK_LEVELS = ("low", "medium", "high", "critical")
 
     def __init__(self):
         self.intake_agent = IntakeSummaryAgent()
@@ -20,22 +31,65 @@ class CaseOrchestrator:
         self.medication_agent = MedicationSafetyAgent()
         self.guideline_agent = GuidelineSupportAgent()
 
-    def analyze_case(self, request: CaseAnalysisRequest) -> CaseAnalysisResponse:
-        # 1. Intake summary
-        intake_req = IntakeSummaryRequest(
-            symptoms=request.symptoms,
-            duration=request.duration,
-            severity=request.severity,
-            history_text=request.history,
-            allergies_text=request.allergies,
-            medications_text=request.medications,
-            patient_name=request.patient_name,
-            age=request.age,
-        )
-        intake_result = self.intake_agent.analyze(intake_req)
+    # -- helpers --------------------------------------------------------
+    def _max_risk(self, *levels: str) -> str:
+        seen = [lvl for lvl in levels if lvl in self.RISK_LEVELS]
+        if not seen:
+            return "low"
+        return max(seen, key=self.RISK_LEVELS.index)
 
-        # 2. Risk triage (returns TriageResult dataclass)
-        triage_result = self.triage_agent.assess(
+    def _safe_run(self, name: str, fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.exception("Agent %s failed: %s", name, exc)
+            return None
+
+    @staticmethod
+    def _split_csv(text: str | None) -> list[str]:
+        if not text:
+            return []
+        return [item.strip() for item in text.split(",") if item.strip()]
+
+    # -- main entry -----------------------------------------------------
+    def analyze_case(self, request: CaseAnalysisRequest) -> CaseAnalysisResponse:
+        safety_alerts: list[str] = []
+        suggestions: list[str] = []
+
+        # 1. Intake summary
+        intake_result = self._safe_run(
+            "intake",
+            self.intake_agent.analyze,
+            IntakeSummaryRequest(
+                symptoms=request.symptoms,
+                duration=request.duration,
+                severity=request.severity,
+                history_text=request.history,
+                allergies_text=request.allergies,
+                medications_text=request.medications,
+                patient_name=request.patient_name,
+                age=request.age,
+            ),
+        )
+        if intake_result is None:
+            safety_alerts.append("[System] Intake summary agent unavailable.")
+            summary = (
+                f"Patient {request.patient_name}, age {request.age}, presenting with "
+                f"{request.symptoms} ({request.severity}, {request.duration})."
+            )
+            key_facts: list[str] = []
+            missing_info: list[str] = []
+            urgency_indicators: list[str] = []
+        else:
+            summary = intake_result.summary
+            key_facts = list(intake_result.key_facts)
+            missing_info = list(intake_result.missing_information)
+            urgency_indicators = list(intake_result.urgency_indicators)
+
+        # 2. Risk triage
+        triage_result = self._safe_run(
+            "triage",
+            self.triage_agent.assess,
             symptoms=request.symptoms,
             duration=request.duration,
             severity=request.severity,
@@ -43,17 +97,48 @@ class CaseOrchestrator:
             gender=request.gender,
             history=request.history,
         )
+        if triage_result is None:
+            safety_alerts.append("[System] Risk triage agent unavailable.")
+            triage_level = "medium"
+            red_flags: list[str] = []
+            triage_notes = "Triage unavailable — please evaluate manually."
+        else:
+            triage_level = triage_result.urgency_level
+            red_flags = list(triage_result.red_flags)
+            triage_notes = triage_result.triage_notes
 
-        # 3. Medication safety (returns MedicationSafetyResponse pydantic model)
-        current_meds = [m.strip() for m in request.medications.split(",") if m.strip()] if request.medications else []
-        med_result = self.medication_agent.check(
-            current_medications=current_meds,
+        # 3. Medication safety
+        med_result = self._safe_run(
+            "medication",
+            self.medication_agent.check,
+            current_medications=self._split_csv(request.medications),
             proposed_medications=[],
-            allergies=[a.strip() for a in request.allergies.split(",") if a.strip()] if request.allergies else [],
+            allergies=self._split_csv(request.allergies),
         )
+        med_alerts: list[dict] = []
+        med_safe = True
+        med_recs: list[str] = []
+        if med_result is None:
+            safety_alerts.append("[System] Medication safety agent unavailable.")
+        else:
+            med_alerts = list(med_result.alerts)
+            med_safe = med_result.safe
+            med_recs = list(med_result.recommendations)
 
-        # 4. Guideline support (returns GuidelineResult dataclass)
-        guideline_result = self.guideline_agent.suggest(
+        for alert in med_alerts:
+            if isinstance(alert, dict):
+                alert_type = alert.get("type", "Warning")
+                alert_msg = alert.get("message", str(alert))
+            else:
+                alert_type, alert_msg = "Warning", str(alert)
+            safety_alerts.append(f"[Medication] {alert_type}: {alert_msg}")
+        for indicator in urgency_indicators:
+            safety_alerts.append(f"[Urgency] {indicator}")
+
+        # 4. Guideline support
+        guideline_result = self._safe_run(
+            "guideline",
+            self.guideline_agent.suggest,
             complaint=request.symptoms,
             history=request.history,
             extracted_facts={
@@ -64,39 +149,38 @@ class CaseOrchestrator:
                 "medications": request.medications,
             },
         )
-
-        # Merge safety alerts
-        safety_alerts = []
-        for alert in med_result.alerts:
-            alert_type = alert.get("type", "Warning") if isinstance(alert, dict) else "Warning"
-            alert_msg = alert.get("message", str(alert)) if isinstance(alert, dict) else str(alert)
-            safety_alerts.append(f"[Medication] {alert_type}: {alert_msg}")
-        for indicator in intake_result.urgency_indicators:
-            safety_alerts.append(f"[Urgency] {indicator}")
-
-        # Merge suggestions
-        suggestions = []
-        suggestions.extend(guideline_result.suggested_tests)
-        suggestions.extend(guideline_result.referral_suggestions)
-        suggestions.extend(guideline_result.follow_up_recommendations)
-        for rec in med_result.recommendations:
+        if guideline_result is None:
+            safety_alerts.append("[System] Guideline support agent unavailable.")
+        else:
+            suggestions.extend(guideline_result.suggested_tests)
+            suggestions.extend(guideline_result.referral_suggestions)
+            suggestions.extend(guideline_result.follow_up_recommendations)
+            if guideline_result.next_questions:
+                triage_notes += (
+                    "\n\nSuggested questions: "
+                    + "; ".join(guideline_result.next_questions)
+                )
+        for rec in med_recs:
             suggestions.append(f"[Medication Safety] {rec}")
 
-        # Determine overall risk level (highest wins)
-        risk_levels = ["low", "medium", "high", "critical"]
-        overall_risk = triage_result.urgency_level
+        # Uploaded reports — surface them so the doctor sees them even when
+        # the AI can't parse structured values out of them.
+        if request.uploaded_reports_text:
+            snippet = request.uploaded_reports_text.strip().splitlines()
+            preview = " ".join(snippet[:5])[:400]
+            suggestions.append(
+                f"[Uploaded report] Review patient-submitted report: {preview}…"
+            )
 
-        if med_result.alerts:
-            med_risk = "high" if len(med_result.alerts) > 1 else "medium"
-            if risk_levels.index(med_risk) > risk_levels.index(overall_risk):
-                overall_risk = med_risk
+        # Determine overall risk (highest wins)
+        overall_risk = triage_level
+        if med_alerts:
+            med_risk = "high" if len(med_alerts) > 1 else "medium"
+            overall_risk = self._max_risk(overall_risk, med_risk)
+        if urgency_indicators:
+            urg_risk = "high" if len(urgency_indicators) > 2 else "medium"
+            overall_risk = self._max_risk(overall_risk, urg_risk)
 
-        if intake_result.urgency_indicators:
-            urg_risk = "high" if len(intake_result.urgency_indicators) > 2 else "medium"
-            if risk_levels.index(urg_risk) > risk_levels.index(overall_risk):
-                overall_risk = urg_risk
-
-        # Build extracted facts
         extracted_facts = {
             "patient_name": request.patient_name,
             "age": request.age,
@@ -104,20 +188,15 @@ class CaseOrchestrator:
             "chief_complaint": request.symptoms,
             "duration": request.duration,
             "severity": request.severity,
-            "key_facts": intake_result.key_facts,
-            "missing_information": intake_result.missing_information,
-            "triage_level": triage_result.urgency_level,
-            "red_flags": triage_result.red_flags,
-            "medication_safe": med_result.safe,
+            "key_facts": key_facts,
+            "missing_information": missing_info,
+            "triage_level": triage_level,
+            "red_flags": red_flags,
+            "medication_safe": med_safe,
         }
 
-        # Triage notes
-        triage_notes = triage_result.triage_notes
-        if guideline_result.next_questions:
-            triage_notes += "\n\nSuggested questions: " + "; ".join(guideline_result.next_questions)
-
         return CaseAnalysisResponse(
-            summary=intake_result.summary,
+            summary=summary,
             extracted_facts=extracted_facts,
             risk_level=overall_risk,
             safety_alerts=safety_alerts,

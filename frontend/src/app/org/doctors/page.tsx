@@ -1,188 +1,141 @@
 "use client";
 
-import { useState, useMemo, useCallback, Fragment } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
-  Edit,
   Eye,
-  Star,
-  Trash2,
   X,
   ChevronDown,
   Phone,
   Mail,
+  Trash2,
+  Upload,
+  RefreshCw,
+  AlertCircle,
+  Check,
+  BriefcaseBusiness,
+  GraduationCap,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
+import { doctors as doctorsApi, specialties as specialtiesApi } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-interface Doctor {
+interface SpecialtyDetail {
   id: number;
   name: string;
+  slug?: string;
+}
+
+interface DoctorSpecialtyLink {
+  id: number;
+  specialty: number;
+  specialty_detail?: SpecialtyDetail;
+}
+
+interface WorkingHistoryEntry {
+  position: string;
+  organization: string;
+  start_year: string;
+  end_year: string;
+}
+
+interface DoctorRecord {
+  id: number;
+  user?: number;
+  organization?: number;
+  full_name: string;
+  gender?: string;
+  position?: string;
+  avatar?: string | null;
+  years_experience?: number;
+  education?: string;
+  license_number?: string;
+  bio?: string;
+  languages?: string[];
+  services?: string[];
+  working_history?: WorkingHistoryEntry[] | unknown[];
+  consultation_fee?: string | number;
+  consultation_duration_minutes?: number;
+  is_public?: boolean;
+  is_active?: boolean;
+  is_verified?: boolean;
+  public_slug?: string;
+  specialties?: DoctorSpecialtyLink[];
+  ai_enabled?: boolean;
+}
+
+interface Specialty {
+  id: number;
+  name: string;
+  slug?: string;
+}
+
+interface NewDoctorForm {
+  first_name: string;
+  last_name: string;
   email: string;
   phone: string;
-  specialty: string;
-  status: "active" | "inactive";
-  patientsToday: number;
-  rating: number;
-  avatar: string;
+  gender: string;
+  position: string;
+  years_experience: string;
+  education: string;
+  license_number: string;
+  bio: string;
+  specialty_ids: number[];
+  languages: string;
+  services: string;
+  consultation_fee: string;
+  consultation_duration_minutes: string;
+  working_history: WorkingHistoryEntry[];
+  is_public: boolean;
+  avatar: File | null;
 }
 
-type ModalMode = "add" | "edit";
-
-/* ------------------------------------------------------------------ */
-/*  Initial mock data                                                  */
-/* ------------------------------------------------------------------ */
-
-const INITIAL_DOCTORS: Doctor[] = [
-  {
-    id: 1,
-    name: "Dr. Aziz Karimov",
-    email: "aziz.karimov@avicenna.uz",
-    phone: "+998 90 123 4567",
-    specialty: "Cardiology",
-    status: "active",
-    patientsToday: 8,
-    rating: 4.8,
-    avatar: "AK",
-  },
-  {
-    id: 2,
-    name: "Dr. Madina Yusupova",
-    email: "madina.yusupova@avicenna.uz",
-    phone: "+998 91 234 5678",
-    specialty: "Dermatology",
-    status: "active",
-    patientsToday: 6,
-    rating: 4.9,
-    avatar: "MY",
-  },
-  {
-    id: 3,
-    name: "Dr. Bobur Rakhimov",
-    email: "bobur.rakhimov@avicenna.uz",
-    phone: "+998 93 345 6789",
-    specialty: "Orthopedics",
-    status: "active",
-    patientsToday: 5,
-    rating: 4.6,
-    avatar: "BR",
-  },
-  {
-    id: 4,
-    name: "Dr. Dilnoza Sultanova",
-    email: "dilnoza.sultanova@avicenna.uz",
-    phone: "+998 94 456 7890",
-    specialty: "Pediatrics",
-    status: "active",
-    patientsToday: 7,
-    rating: 4.7,
-    avatar: "DS",
-  },
-  {
-    id: 5,
-    name: "Dr. Javlon Mirzaev",
-    email: "javlon.mirzaev@avicenna.uz",
-    phone: "+998 95 567 8901",
-    specialty: "Neurology",
-    status: "inactive",
-    patientsToday: 0,
-    rating: 4.5,
-    avatar: "JM",
-  },
-  {
-    id: 6,
-    name: "Dr. Sevara Nazarova",
-    email: "sevara.nazarova@avicenna.uz",
-    phone: "+998 97 678 9012",
-    specialty: "General Practice",
-    status: "active",
-    patientsToday: 3,
-    rating: 4.4,
-    avatar: "SN",
-  },
-];
-
-const ALL_SPECIALTIES = [
-  "Cardiology",
-  "Dermatology",
-  "General Practice",
-  "Neurology",
-  "Orthopedics",
-  "Pediatrics",
-];
-
-/* ------------------------------------------------------------------ */
-/*  Helper: derive avatar initials from a name                         */
-/* ------------------------------------------------------------------ */
+const EMPTY_FORM: NewDoctorForm = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  gender: "",
+  position: "",
+  years_experience: "0",
+  education: "",
+  license_number: "",
+  bio: "",
+  specialty_ids: [],
+  languages: "",
+  services: "",
+  consultation_fee: "0",
+  consultation_duration_minutes: "30",
+  working_history: [{ position: "", organization: "", start_year: "", end_year: "" }],
+  is_public: true,
+  avatar: null,
+};
 
 function initialsFromName(name: string): string {
-  const parts = name.replace(/^Dr\.?\s*/i, "").trim().split(/\s+/);
+  const parts = name.replace(/^Dr\.?\s*/i, "").trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return (parts[0]?.[0] ?? "?").toUpperCase();
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return "?";
+}
+
+function doctorSpecialtyNames(doctor: DoctorRecord): string {
+  if (!doctor.specialties || doctor.specialties.length === 0) return "—";
+  return doctor.specialties
+    .map((s) => s.specialty_detail?.name)
+    .filter(Boolean)
+    .join(", ") || "—";
 }
 
 /* ------------------------------------------------------------------ */
-/*  Sub-components                                                     */
+/*  Modal overlay                                                      */
 /* ------------------------------------------------------------------ */
-
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Star
-          key={star}
-          size={14}
-          className={
-            star <= Math.round(rating)
-              ? "text-amber-400 fill-amber-400"
-              : "text-gray-200"
-          }
-        />
-      ))}
-      <span className="text-sm text-muted ml-1">{rating.toFixed(1)}</span>
-    </div>
-  );
-}
-
-/* ---------- Status toggle ----------------------------------------- */
-
-function StatusToggle({
-  active,
-  onChange,
-}: {
-  active: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={active}
-      onClick={onChange}
-      className={`
-        relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent
-        transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-1
-        ${active ? "bg-teal-500" : "bg-gray-300"}
-      `}
-    >
-      <span
-        className={`
-          pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
-          transition-transform duration-200 ease-in-out
-          ${active ? "translate-x-5" : "translate-x-0"}
-        `}
-      />
-    </button>
-  );
-}
-
-/* ---------- Modal overlay ----------------------------------------- */
 
 function ModalOverlay({
   open,
@@ -195,80 +148,64 @@ function ModalOverlay({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* backdrop */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      {/* panel */}
-      <div className="relative w-full max-w-lg mx-4 bg-white rounded-xl shadow-xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-xl animate-in fade-in zoom-in-95 duration-200">
         {children}
       </div>
     </div>
   );
 }
 
-/* ---------- Delete confirmation dialog ----------------------------- */
-
-function ConfirmDialog({
-  open,
-  title,
-  message,
-  onConfirm,
-  onCancel,
-}: {
-  open: boolean;
-  title: string;
-  message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onCancel}
-      />
-      <div className="relative w-full max-w-sm mx-4 bg-white rounded-xl shadow-xl p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-        <p className="text-sm text-muted">{message}</p>
-        <div className="flex justify-end gap-3">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button variant="danger" size="sm" onClick={onConfirm}>
-            Delete
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Detail panel (view mode) ------------------------------- */
+/* ------------------------------------------------------------------ */
+/*  Doctor detail panel                                                */
+/* ------------------------------------------------------------------ */
 
 function DoctorDetail({
   doctor,
   onClose,
 }: {
-  doctor: Doctor;
+  doctor: DoctorRecord;
   onClose: () => void;
 }) {
+  const history = (doctor.working_history as WorkingHistoryEntry[]) || [];
   return (
     <Card className="border-teal-200 shadow-md">
       <CardContent className="p-6 space-y-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-teal-50 text-primary flex items-center justify-center text-lg font-semibold">
-              {doctor.avatar}
-            </div>
+            {doctor.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={doctor.avatar}
+                alt={doctor.full_name}
+                className="w-14 h-14 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-teal-50 text-primary flex items-center justify-center text-lg font-semibold">
+                {initialsFromName(doctor.full_name)}
+              </div>
+            )}
             <div>
-              <h3 className="text-lg font-semibold text-foreground">
-                {doctor.name}
-              </h3>
-              <p className="text-sm text-muted">{doctor.specialty}</p>
+              <h3 className="text-lg font-semibold text-foreground">{doctor.full_name}</h3>
+              <p className="text-sm text-muted">
+                {doctor.position || doctorSpecialtyNames(doctor)}
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant={doctor.is_public ? "success" : "default"} size="sm">
+                  {doctor.is_public ? "Public" : "Private"}
+                </Badge>
+                {doctor.is_verified && (
+                  <Badge variant="primary" size="sm">
+                    Verified
+                  </Badge>
+                )}
+                {doctor.ai_enabled && (
+                  <Badge variant="info" size="sm">
+                    AI enabled
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           <button
@@ -279,201 +216,294 @@ function DoctorDetail({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted uppercase tracking-wider">
-              Email
+              Specialties
             </p>
-            <p className="text-sm text-foreground flex items-center gap-1.5">
-              <Mail size={14} className="text-muted" />
-              {doctor.email}
-            </p>
+            <p className="text-sm text-foreground">{doctorSpecialtyNames(doctor)}</p>
           </div>
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted uppercase tracking-wider">
-              Phone
+              Years of experience
             </p>
-            <p className="text-sm text-foreground flex items-center gap-1.5">
-              <Phone size={14} className="text-muted" />
-              {doctor.phone}
-            </p>
+            <p className="text-sm text-foreground">{doctor.years_experience ?? 0}</p>
           </div>
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted uppercase tracking-wider">
-              Status
-            </p>
-            <Badge
-              variant={doctor.status === "active" ? "success" : "default"}
-              size="sm"
-            >
-              {doctor.status === "active" ? "Active" : "Inactive"}
-            </Badge>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted uppercase tracking-wider">
-              Patients Today
-            </p>
-            <p className="text-sm font-medium text-foreground">
-              {doctor.patientsToday}
-            </p>
-          </div>
-          <div className="space-y-1 col-span-2">
-            <p className="text-xs font-medium text-muted uppercase tracking-wider">
-              Rating
-            </p>
-            <StarRating rating={doctor.rating} />
-          </div>
+          {doctor.education && (
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-xs font-medium text-muted uppercase tracking-wider flex items-center gap-1">
+                <GraduationCap size={12} /> Education
+              </p>
+              <p className="text-sm text-foreground whitespace-pre-line">{doctor.education}</p>
+            </div>
+          )}
+          {doctor.license_number && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted uppercase tracking-wider">
+                License number
+              </p>
+              <p className="text-sm text-foreground">{doctor.license_number}</p>
+            </div>
+          )}
+          {doctor.languages && doctor.languages.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted uppercase tracking-wider">
+                Languages
+              </p>
+              <p className="text-sm text-foreground">{doctor.languages.join(", ")}</p>
+            </div>
+          )}
+          {doctor.bio && (
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-xs font-medium text-muted uppercase tracking-wider">Bio</p>
+              <p className="text-sm text-foreground whitespace-pre-line">{doctor.bio}</p>
+            </div>
+          )}
         </div>
+
+        {history.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted uppercase tracking-wider mb-2 flex items-center gap-1">
+              <BriefcaseBusiness size={12} /> Working history
+            </p>
+            <ul className="space-y-2">
+              {history.map((entry, idx) => (
+                <li key={idx} className="text-sm">
+                  <span className="font-medium text-foreground">
+                    {entry.position || "—"}
+                  </span>{" "}
+                  <span className="text-muted">at {entry.organization || "—"}</span>{" "}
+                  <span className="text-muted">
+                    ({entry.start_year || "?"} – {entry.end_year || "present"})
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Main page component                                                */
+/*  Main page                                                          */
 /* ------------------------------------------------------------------ */
 
 export default function OrgDoctorsPage() {
-  /* --- state ------------------------------------------------------- */
-  const [doctors, setDoctors] = useState<Doctor[]>(INITIAL_DOCTORS);
+  const [doctors, setDoctors] = useState<DoctorRecord[]>([]);
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [specialtyFilter, setSpecialtyFilter] = useState<string>("All");
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<ModalMode>("add");
-  const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
-
-  // View detail
   const [viewingDoctorId, setViewingDoctorId] = useState<number | null>(null);
 
-  // Delete confirmation
-  const [deletingDoctor, setDeletingDoctor] = useState<Doctor | null>(null);
+  const [form, setForm] = useState<NewDoctorForm>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Form fields
-  const [formName, setFormName] = useState("");
-  const [formEmail, setFormEmail] = useState("");
-  const [formSpecialty, setFormSpecialty] = useState(ALL_SPECIALTIES[0]);
-  const [formPhone, setFormPhone] = useState("");
-  const [formStatus, setFormStatus] = useState<"active" | "inactive">("active");
+  /* --- loaders --------------------------------------------------- */
+  const loadDoctors = useCallback(async () => {
+    setLoading(true);
+    setListError(null);
+    try {
+      const data = await doctorsApi.list();
+      const list: DoctorRecord[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.results)
+          ? data.results
+          : [];
+      setDoctors(list);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setListError(msg);
+      setDoctors([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  /* --- derived ----------------------------------------------------- */
-  const specialties = useMemo(
-    () => Array.from(new Set(doctors.map((d) => d.specialty))).sort(),
-    [doctors]
-  );
+  const loadSpecialties = useCallback(async () => {
+    try {
+      const data = await specialtiesApi.list();
+      setSpecialties(Array.isArray(data) ? data : []);
+    } catch {
+      setSpecialties([]);
+    }
+  }, []);
 
+  useEffect(() => {
+    loadDoctors();
+    loadSpecialties();
+  }, [loadDoctors, loadSpecialties]);
+
+  /* --- derived --------------------------------------------------- */
   const filtered = useMemo(() => {
     return doctors.filter((d) => {
+      const term = search.toLowerCase();
       const matchesSearch =
-        d.name.toLowerCase().includes(search.toLowerCase()) ||
-        d.specialty.toLowerCase().includes(search.toLowerCase());
+        !term ||
+        d.full_name.toLowerCase().includes(term) ||
+        (d.position ?? "").toLowerCase().includes(term) ||
+        doctorSpecialtyNames(d).toLowerCase().includes(term);
       const matchesSpecialty =
-        specialtyFilter === "All" || d.specialty === specialtyFilter;
+        specialtyFilter === "All" ||
+        (d.specialties || []).some(
+          (s) => s.specialty_detail?.name === specialtyFilter
+        );
       return matchesSearch && matchesSpecialty;
     });
   }, [doctors, search, specialtyFilter]);
 
-  /* --- helpers ----------------------------------------------------- */
+  /* --- form helpers --------------------------------------------- */
   const resetForm = useCallback(() => {
-    setFormName("");
-    setFormEmail("");
-    setFormSpecialty(ALL_SPECIALTIES[0]);
-    setFormPhone("");
-    setFormStatus("active");
+    setForm(EMPTY_FORM);
+    setSaveError(null);
   }, []);
 
   const openAddModal = useCallback(() => {
     resetForm();
-    setModalMode("add");
-    setEditingDoctor(null);
+    setSuccessMsg(null);
     setModalOpen(true);
   }, [resetForm]);
 
-  const openEditModal = useCallback((doctor: Doctor) => {
-    setFormName(doctor.name);
-    setFormEmail(doctor.email);
-    setFormSpecialty(doctor.specialty);
-    setFormPhone(doctor.phone);
-    setFormStatus(doctor.status);
-    setModalMode("edit");
-    setEditingDoctor(doctor);
-    setModalOpen(true);
-  }, []);
-
   const closeModal = useCallback(() => {
     setModalOpen(false);
-    setEditingDoctor(null);
   }, []);
 
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!formName.trim() || !formEmail.trim()) return;
-
-      if (modalMode === "add") {
-        const newDoctor: Doctor = {
-          id: Date.now(),
-          name: formName.trim(),
-          email: formEmail.trim(),
-          phone: formPhone.trim(),
-          specialty: formSpecialty,
-          status: formStatus,
-          patientsToday: 0,
-          rating: 0,
-          avatar: initialsFromName(formName),
-        };
-        setDoctors((prev) => [...prev, newDoctor]);
-      } else if (editingDoctor) {
-        setDoctors((prev) =>
-          prev.map((d) =>
-            d.id === editingDoctor.id
-              ? {
-                  ...d,
-                  name: formName.trim(),
-                  email: formEmail.trim(),
-                  phone: formPhone.trim(),
-                  specialty: formSpecialty,
-                  status: formStatus,
-                  avatar: initialsFromName(formName),
-                }
-              : d
-          )
-        );
-      }
-
-      closeModal();
+  const updateField = useCallback(
+    <K extends keyof NewDoctorForm>(key: K, value: NewDoctorForm[K]) => {
+      setForm((prev) => ({ ...prev, [key]: value }));
     },
-    [
-      modalMode,
-      editingDoctor,
-      formName,
-      formEmail,
-      formPhone,
-      formSpecialty,
-      formStatus,
-      closeModal,
-    ]
+    []
   );
 
-  const toggleStatus = useCallback((id: number) => {
-    setDoctors((prev) =>
-      prev.map((d) =>
-        d.id === id
-          ? { ...d, status: d.status === "active" ? "inactive" : "active" }
-          : d
-      )
-    );
+  const toggleSpecialty = useCallback((id: number) => {
+    setForm((prev) => {
+      const exists = prev.specialty_ids.includes(id);
+      return {
+        ...prev,
+        specialty_ids: exists
+          ? prev.specialty_ids.filter((sid) => sid !== id)
+          : [...prev.specialty_ids, id],
+      };
+    });
   }, []);
 
-  const confirmDelete = useCallback(() => {
-    if (!deletingDoctor) return;
-    setDoctors((prev) => prev.filter((d) => d.id !== deletingDoctor.id));
-    if (viewingDoctorId === deletingDoctor.id) setViewingDoctorId(null);
-    setDeletingDoctor(null);
-  }, [deletingDoctor, viewingDoctorId]);
+  const updateHistoryEntry = useCallback(
+    (index: number, field: keyof WorkingHistoryEntry, value: string) => {
+      setForm((prev) => {
+        const next = [...prev.working_history];
+        next[index] = { ...next[index], [field]: value };
+        return { ...prev, working_history: next };
+      });
+    },
+    []
+  );
 
-  /* --- render ------------------------------------------------------ */
+  const addHistoryEntry = useCallback(() => {
+    setForm((prev) => ({
+      ...prev,
+      working_history: [
+        ...prev.working_history,
+        { position: "", organization: "", start_year: "", end_year: "" },
+      ],
+    }));
+  }, []);
+
+  const removeHistoryEntry = useCallback((index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      working_history: prev.working_history.filter((_, i) => i !== index),
+    }));
+  }, []);
+
+  /* --- submit ---------------------------------------------------- */
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setSaveError(null);
+
+      if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim()) {
+        setSaveError("First name, last name, and email are required.");
+        return;
+      }
+
+      setSaving(true);
+      try {
+        // Filter out blank working_history rows so we don't pollute the record
+        const cleanHistory = form.working_history.filter(
+          (h) => h.position.trim() || h.organization.trim()
+        );
+        const languages = form.languages
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const services = form.services
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        const fd = new FormData();
+        fd.append("first_name", form.first_name.trim());
+        fd.append("last_name", form.last_name.trim());
+        fd.append("email", form.email.trim());
+        if (form.phone.trim()) fd.append("phone", form.phone.trim());
+        if (form.gender) fd.append("gender", form.gender);
+        if (form.position.trim()) fd.append("position", form.position.trim());
+        if (form.bio.trim()) fd.append("bio", form.bio.trim());
+        fd.append("years_experience", form.years_experience || "0");
+        if (form.education.trim()) fd.append("education", form.education.trim());
+        if (form.license_number.trim())
+          fd.append("license_number", form.license_number.trim());
+        form.specialty_ids.forEach((id) =>
+          fd.append("specialty_ids", String(id))
+        );
+        languages.forEach((l) => fd.append("languages", l));
+        services.forEach((s) => fd.append("services", s));
+        fd.append("working_history", JSON.stringify(cleanHistory));
+        fd.append("consultation_fee", form.consultation_fee || "0");
+        fd.append(
+          "consultation_duration_minutes",
+          form.consultation_duration_minutes || "30"
+        );
+        fd.append("is_public", form.is_public ? "true" : "false");
+        if (form.avatar) fd.append("avatar", form.avatar);
+
+        const result = await doctorsApi.adminAdd(fd);
+        const newDoctor: DoctorRecord | undefined = result?.doctor;
+        const tempPassword: string | undefined = result?.temporary_password;
+
+        if (newDoctor) {
+          setDoctors((prev) => [newDoctor, ...prev]);
+        } else {
+          // Fallback: reload the list
+          loadDoctors();
+        }
+
+        setSuccessMsg(
+          tempPassword
+            ? `Doctor added successfully. Temporary password: ${tempPassword}`
+            : "Doctor added successfully."
+        );
+        closeModal();
+        resetForm();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setSaveError(msg);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [form, closeModal, resetForm, loadDoctors]
+  );
+
+  /* --- render ---------------------------------------------------- */
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -481,14 +511,35 @@ export default function OrgDoctorsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Doctors</h1>
           <p className="text-muted mt-1">
-            Manage your clinic&apos;s medical staff
+            Manage your clinic&apos;s medical staff. New doctors are automatically
+            published to the public doctors directory.
           </p>
         </div>
-        <Button onClick={openAddModal}>
-          <Plus size={16} />
-          Add Doctor
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadDoctors} disabled={loading}>
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            Refresh
+          </Button>
+          <Button onClick={openAddModal}>
+            <Plus size={16} />
+            Add Doctor
+          </Button>
+        </div>
       </div>
+
+      {/* Success banner */}
+      {successMsg && (
+        <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          <Check size={16} className="mt-0.5" />
+          <div className="flex-1">{successMsg}</div>
+          <button
+            onClick={() => setSuccessMsg(null)}
+            className="text-green-700 hover:text-green-900"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Search + Filter */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -505,7 +556,6 @@ export default function OrgDoctorsPage() {
             className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
-
         <div className="relative">
           <select
             value={specialtyFilter}
@@ -514,8 +564,8 @@ export default function OrgDoctorsPage() {
           >
             <option value="All">All Specialties</option>
             {specialties.map((s) => (
-              <option key={s} value={s}>
-                {s}
+              <option key={s.id} value={s.name}>
+                {s.name}
               </option>
             ))}
           </select>
@@ -526,7 +576,17 @@ export default function OrgDoctorsPage() {
         </div>
       </div>
 
-      {/* Detail panel (appears above table when viewing) */}
+      {/* List error */}
+      {listError && (
+        <Card className="border-red-100 bg-red-50">
+          <CardContent className="text-sm text-red-700 flex items-start gap-2">
+            <AlertCircle size={16} className="mt-0.5" />
+            Couldn&apos;t load doctors: {listError}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Detail panel */}
       {viewingDoctorId !== null && (
         <DoctorDetail
           doctor={doctors.find((d) => d.id === viewingDoctorId)!}
@@ -548,13 +608,10 @@ export default function OrgDoctorsPage() {
                     Specialty
                   </th>
                   <th className="text-left text-xs font-medium text-muted uppercase tracking-wider px-6 py-3">
-                    Status
+                    Experience
                   </th>
                   <th className="text-left text-xs font-medium text-muted uppercase tracking-wider px-6 py-3">
-                    Patients Today
-                  </th>
-                  <th className="text-left text-xs font-medium text-muted uppercase tracking-wider px-6 py-3">
-                    Rating
+                    Visibility
                   </th>
                   <th className="text-right text-xs font-medium text-muted uppercase tracking-wider px-6 py-3">
                     Actions
@@ -562,115 +619,108 @@ export default function OrgDoctorsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map((doctor) => (
-                  <tr
-                    key={doctor.id}
-                    className={`hover:bg-gray-50/50 transition-colors ${
-                      viewingDoctorId === doctor.id ? "bg-teal-50/40" : ""
-                    }`}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-teal-50 text-primary flex items-center justify-center text-sm font-semibold">
-                          {doctor.avatar}
-                        </div>
-                        <div>
-                          <span className="text-sm font-medium text-foreground block">
-                            {doctor.name}
-                          </span>
-                          <span className="text-xs text-muted">
-                            {doctor.email}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-muted">
-                      {doctor.specialty}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <StatusToggle
-                          active={doctor.status === "active"}
-                          onChange={() => toggleStatus(doctor.id)}
-                        />
-                        <Badge
-                          variant={
-                            doctor.status === "active" ? "success" : "default"
-                          }
-                          size="sm"
-                        >
-                          {doctor.status === "active" ? "Active" : "Inactive"}
-                        </Badge>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-foreground">
-                      {doctor.patientsToday}
-                    </td>
-                    <td className="px-6 py-4">
-                      <StarRating rating={doctor.rating} />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() =>
-                            setViewingDoctorId(
-                              viewingDoctorId === doctor.id
-                                ? null
-                                : doctor.id
-                            )
-                          }
-                          title="View details"
-                          className={`p-2 rounded-lg transition-colors ${
-                            viewingDoctorId === doctor.id
-                              ? "text-primary bg-teal-50"
-                              : "text-muted hover:text-primary hover:bg-teal-50"
-                          }`}
-                        >
-                          <Eye size={16} />
-                        </button>
-                        <button
-                          onClick={() => openEditModal(doctor)}
-                          title="Edit doctor"
-                          className="p-2 rounded-lg text-muted hover:text-primary hover:bg-teal-50 transition-colors"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={() => setDeletingDoctor(doctor)}
-                          title="Delete doctor"
-                          className="p-2 rounded-lg text-muted hover:text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                {loading && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12 text-muted text-sm">
+                      Loading doctors…
                     </td>
                   </tr>
-                ))}
+                )}
+                {!loading && filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12 text-muted text-sm">
+                      No doctors found. Click &ldquo;Add Doctor&rdquo; to onboard your first one.
+                    </td>
+                  </tr>
+                )}
+                {!loading &&
+                  filtered.map((doctor) => (
+                    <tr
+                      key={doctor.id}
+                      className={`hover:bg-gray-50/50 transition-colors ${
+                        viewingDoctorId === doctor.id ? "bg-teal-50/40" : ""
+                      }`}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {doctor.avatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={doctor.avatar}
+                              alt={doctor.full_name}
+                              className="w-9 h-9 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-teal-50 text-primary flex items-center justify-center text-sm font-semibold">
+                              {initialsFromName(doctor.full_name)}
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-sm font-medium text-foreground block">
+                              {doctor.full_name}
+                            </span>
+                            <span className="text-xs text-muted">
+                              {doctor.position || "Doctor"}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted">
+                        {doctorSpecialtyNames(doctor)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted">
+                        {doctor.years_experience ?? 0} yrs
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge
+                          variant={doctor.is_public ? "success" : "default"}
+                          size="sm"
+                        >
+                          {doctor.is_public ? "Public" : "Private"}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() =>
+                              setViewingDoctorId(
+                                viewingDoctorId === doctor.id ? null : doctor.id
+                              )
+                            }
+                            title="View details"
+                            className={`p-2 rounded-lg transition-colors ${
+                              viewingDoctorId === doctor.id
+                                ? "text-primary bg-teal-50"
+                                : "text-muted hover:text-primary hover:bg-teal-50"
+                            }`}
+                          >
+                            <Eye size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
-
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-muted text-sm">
-              No doctors found matching your search.
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* Count */}
       <p className="text-xs text-muted text-right">
         Showing {filtered.length} of {doctors.length} doctors
       </p>
 
-      {/* ---- Add / Edit Modal ---- */}
+      {/* ---- Add Doctor Modal ---- */}
       <ModalOverlay open={modalOpen} onClose={closeModal}>
         <form onSubmit={handleSubmit}>
-          {/* header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-foreground">
-              {modalMode === "add" ? "Add New Doctor" : "Edit Doctor"}
-            </h2>
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Add New Doctor</h2>
+              <p className="text-xs text-muted mt-0.5">
+                A temporary password will be generated and shown on success.
+              </p>
+            </div>
             <button
               type="button"
               onClick={closeModal}
@@ -680,117 +730,377 @@ export default function OrgDoctorsPage() {
             </button>
           </div>
 
-          {/* body */}
-          <div className="px-6 py-5 space-y-4">
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Full Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="Dr. First Last"
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                required
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                placeholder="doctor@avicenna.uz"
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              />
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Phone
-              </label>
-              <input
-                type="tel"
-                value={formPhone}
-                onChange={(e) => setFormPhone(e.target.value)}
-                placeholder="+998 90 123 4567"
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              />
-            </div>
-
-            {/* Specialty */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Specialty
-              </label>
-              <div className="relative">
-                <select
-                  value={formSpecialty}
-                  onChange={(e) => setFormSpecialty(e.target.value)}
-                  className="w-full appearance-none px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
-                >
-                  {ALL_SPECIALTIES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
-                />
+          {/* Body */}
+          <div className="px-6 py-5 space-y-6">
+            {saveError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle size={16} className="mt-0.5" />
+                <div>{saveError}</div>
               </div>
-            </div>
+            )}
 
-            {/* Status */}
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-foreground">
-                Status
-              </label>
-              <div className="flex items-center gap-2">
-                <StatusToggle
-                  active={formStatus === "active"}
-                  onChange={() =>
-                    setFormStatus((s) =>
-                      s === "active" ? "inactive" : "active"
-                    )
+            {/* Photo */}
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">Profile photo</h3>
+              <label className="flex items-center gap-4 cursor-pointer">
+                <div className="w-16 h-16 rounded-full bg-teal-50 text-primary flex items-center justify-center text-lg font-semibold overflow-hidden">
+                  {form.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={URL.createObjectURL(form.avatar)}
+                      alt="preview"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    initialsFromName(`${form.first_name} ${form.last_name}`)
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-sm text-primary hover:text-primary-dark">
+                  <Upload size={16} />
+                  {form.avatar ? "Change photo" : "Upload photo"}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) =>
+                    updateField("avatar", e.target.files?.[0] ?? null)
                   }
                 />
-                <span className="text-sm text-muted">
-                  {formStatus === "active" ? "Active" : "Inactive"}
-                </span>
+              </label>
+            </section>
+
+            {/* Basic info */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">Basic info</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    First name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.first_name}
+                    onChange={(e) => updateField("first_name", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Last name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.last_name}
+                    onChange={(e) => updateField("last_name", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={(e) => updateField("email", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    placeholder="+998 90 123 4567"
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Gender
+                  </label>
+                  <select
+                    value={form.gender}
+                    onChange={(e) => updateField("gender", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Position / title
+                  </label>
+                  <input
+                    type="text"
+                    value={form.position}
+                    onChange={(e) => updateField("position", e.target.value)}
+                    placeholder="Senior Cardiologist"
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
               </div>
-            </div>
+            </section>
+
+            {/* Specialties */}
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">Specialties</h3>
+              {specialties.length === 0 ? (
+                <p className="text-xs text-muted">
+                  No specialties available. Add specialties from the catalog first.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {specialties.map((spec) => {
+                    const selected = form.specialty_ids.includes(spec.id);
+                    return (
+                      <button
+                        key={spec.id}
+                        type="button"
+                        onClick={() => toggleSpecialty(spec.id)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                          selected
+                            ? "bg-teal-50 border-primary text-primary"
+                            : "bg-white border-gray-200 text-muted hover:border-gray-300"
+                        }`}
+                      >
+                        {spec.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* Professional details */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-foreground">
+                Professional details
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Years of experience
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.years_experience}
+                    onChange={(e) => updateField("years_experience", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Consultation fee
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.consultation_fee}
+                    onChange={(e) => updateField("consultation_fee", e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Slot duration (min)
+                  </label>
+                  <input
+                    type="number"
+                    min="5"
+                    step="5"
+                    value={form.consultation_duration_minutes}
+                    onChange={(e) =>
+                      updateField("consultation_duration_minutes", e.target.value)
+                    }
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Education
+                </label>
+                <textarea
+                  rows={2}
+                  value={form.education}
+                  onChange={(e) => updateField("education", e.target.value)}
+                  placeholder="MD, Tashkent Medical Academy (2010)"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    License number
+                  </label>
+                  <input
+                    type="text"
+                    value={form.license_number}
+                    onChange={(e) => updateField("license_number", e.target.value)}
+                    placeholder="UZ-MED-12345"
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Languages (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.languages}
+                    onChange={(e) => updateField("languages", e.target.value)}
+                    placeholder="Uzbek, Russian, English"
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Services offered (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={form.services}
+                  onChange={(e) => updateField("services", e.target.value)}
+                  placeholder="ECG, Echocardiography, Stress testing"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Bio
+                </label>
+                <textarea
+                  rows={3}
+                  value={form.bio}
+                  onChange={(e) => updateField("bio", e.target.value)}
+                  placeholder="Short bio shown on the public profile"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+            </section>
+
+            {/* Working history */}
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-foreground">Working history</h3>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={addHistoryEntry}
+                >
+                  <Plus size={14} /> Add entry
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {form.working_history.map((entry, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-lg border border-gray-100 bg-gray-50/50 p-3 space-y-2"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Position (e.g. Cardiologist)"
+                        value={entry.position}
+                        onChange={(e) =>
+                          updateHistoryEntry(idx, "position", e.target.value)
+                        }
+                        className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Organization / hospital"
+                        value={entry.organization}
+                        onChange={(e) =>
+                          updateHistoryEntry(idx, "organization", e.target.value)
+                        }
+                        className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                    </div>
+                    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                      <input
+                        type="text"
+                        placeholder="Start year"
+                        value={entry.start_year}
+                        onChange={(e) =>
+                          updateHistoryEntry(idx, "start_year", e.target.value)
+                        }
+                        className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                      <input
+                        type="text"
+                        placeholder="End year (or 'present')"
+                        value={entry.end_year}
+                        onChange={(e) =>
+                          updateHistoryEntry(idx, "end_year", e.target.value)
+                        }
+                        className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                      {form.working_history.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeHistoryEntry(idx)}
+                          className="p-2 rounded-lg text-muted hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Remove entry"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Visibility */}
+            <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">Visibility</h3>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.is_public}
+                  onChange={(e) => updateField("is_public", e.target.checked)}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="text-sm font-medium text-foreground">
+                    Publish to public doctors directory
+                  </div>
+                  <div className="text-xs text-muted">
+                    Patients will be able to discover and book with this doctor on the
+                    public website.
+                  </div>
+                </div>
+              </label>
+            </section>
           </div>
 
-          {/* footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
             <Button type="button" variant="ghost" size="sm" onClick={closeModal}>
               Cancel
             </Button>
-            <Button type="submit" size="sm">
-              {modalMode === "add" ? "Add Doctor" : "Save Changes"}
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving ? "Adding…" : "Add Doctor"}
             </Button>
           </div>
         </form>
       </ModalOverlay>
-
-      {/* ---- Delete Confirmation ---- */}
-      <ConfirmDialog
-        open={deletingDoctor !== null}
-        title="Delete Doctor"
-        message={`Are you sure you want to remove ${deletingDoctor?.name ?? "this doctor"}? This action cannot be undone.`}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeletingDoctor(null)}
-      />
     </div>
   );
 }

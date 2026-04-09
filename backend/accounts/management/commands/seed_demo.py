@@ -3,6 +3,7 @@ Seed the database with demo data for Avicenna.
 Usage: python manage.py seed_demo
 """
 
+import os
 from datetime import timedelta
 from decimal import Decimal
 
@@ -10,6 +11,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from accounts.models import User
+from billing.models import Subscription, SubscriptionPlan
 from organizations.models import Organization, Department, Specialty
 from doctors.models import DoctorProfile, DoctorSpecialty
 from patients.models import PatientProfile, MedicalHistory
@@ -21,11 +23,61 @@ from reminders.models import Reminder
 from reviews.models import Review
 
 
+DEMO_ADMIN_PASSWORD = os.getenv('DEMO_ADMIN_PASSWORD', 'admin1234')
+DEMO_USER_PASSWORD = os.getenv('DEMO_USER_PASSWORD', 'demo1234')
+
+
 class Command(BaseCommand):
     help = "Seed the database with demo data for Avicenna"
 
     def handle(self, *args, **options):
         self.stdout.write("Seeding Avicenna demo data...")
+
+        # --- Subscription plans ---
+        plans = [
+            {
+                "code": SubscriptionPlan.Code.FREE_DOCTOR,
+                "name": "Free Doctor",
+                "description": "Free profile on the public doctors directory. No AI assistant.",
+                "price_monthly": Decimal("0.00"),
+                "max_doctors": 1,
+                "ai_enabled": False,
+                "features": ["Public profile", "Booking requests"],
+            },
+            {
+                "code": SubscriptionPlan.Code.INDIVIDUAL_DOCTOR,
+                "name": "Individual Doctor",
+                "description": "Independent doctor with full AI assistant access.",
+                "price_monthly": Decimal("15.00"),
+                "max_doctors": 1,
+                "ai_enabled": True,
+                "features": [
+                    "Public profile",
+                    "AI intake summary",
+                    "AI case analysis",
+                    "AI medication safety",
+                    "AI report analysis",
+                ],
+            },
+            {
+                "code": SubscriptionPlan.Code.CLINIC,
+                "name": "Clinic",
+                "description": "Full-featured plan for clinics with up to 10 doctors.",
+                "price_monthly": Decimal("99.00"),
+                "max_doctors": 10,
+                "ai_enabled": True,
+                "features": [
+                    "Everything in Individual Doctor",
+                    "Up to 10 doctor seats",
+                    "Clinic admin dashboard",
+                    "Queue management",
+                    "Analytics",
+                ],
+            },
+        ]
+        for p in plans:
+            SubscriptionPlan.objects.update_or_create(code=p["code"], defaults=p)
+        clinic_plan = SubscriptionPlan.objects.get(code=SubscriptionPlan.Code.CLINIC)
 
         # --- Specialties ---
         specs = {}
@@ -62,6 +114,11 @@ class Command(BaseCommand):
         )
         dept_cardio, _ = Department.objects.get_or_create(
             organization=org, slug="cardiology", defaults={"name": "Cardiology"}
+        )
+
+        Subscription.objects.get_or_create(
+            organization=org,
+            defaults={"plan": clinic_plan, "status": Subscription.Status.ACTIVE},
         )
 
         # --- Doctor users and profiles ---
@@ -113,7 +170,7 @@ class Command(BaseCommand):
                 },
             )
             if created:
-                user.set_password("demo1234")
+                user.set_password(DEMO_USER_PASSWORD)
                 user.save()
 
             profile, _ = DoctorProfile.objects.get_or_create(
@@ -156,7 +213,7 @@ class Command(BaseCommand):
                 },
             )
             if created:
-                user.set_password("demo1234")
+                user.set_password(DEMO_USER_PASSWORD)
                 user.save()
 
             profile, _ = PatientProfile.objects.get_or_create(
@@ -203,7 +260,7 @@ class Command(BaseCommand):
             },
         )
         if created:
-            admin_user.set_password("admin1234")
+            admin_user.set_password(DEMO_ADMIN_PASSWORD)
             admin_user.save()
 
         # --- Appointments ---
@@ -367,11 +424,13 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             "Demo data seeded successfully!\n"
             "  - 1 clinic, 2 departments, 6 specialties\n"
+            "  - 3 subscription plans (free_doctor, individual_doctor, clinic)\n"
             "  - 3 doctors, 5 patients, 1 admin\n"
             "  - 10 appointments, 5 intake forms, 5 queue tickets\n"
             "  - 3 encounters, 4 prescriptions, 2 reminders, 3 reviews\n"
-            "\nLogin credentials:\n"
-            "  Admin: admin@avicenna.uz / admin1234\n"
-            "  Doctor: dr.karimov@avicenna.uz / demo1234\n"
-            "  Patient: sardor@mail.uz / demo1234"
+            "\nDemo accounts (passwords come from DEMO_ADMIN_PASSWORD / "
+            "DEMO_USER_PASSWORD in your .env):\n"
+            "  Admin: admin@avicenna.uz\n"
+            "  Doctor: dr.karimov@avicenna.uz\n"
+            "  Patient: sardor@mail.uz"
         ))

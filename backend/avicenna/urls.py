@@ -20,6 +20,7 @@ urlpatterns = [
     path('api/v1/uploads/', include('uploads.urls')),
     path('api/v1/triage/', include('triage.urls')),
     path('api/v1/analytics/', include('analytics.urls')),
+    path('api/v1/billing/', include('billing.urls')),
 ]
 
 if settings.DEBUG:

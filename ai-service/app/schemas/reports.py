@@ -14,6 +14,12 @@ class ReportAnalysisResponse(BaseModel):
     recommendations: list[str]
 
 
+class ReportUploadResponse(BaseModel):
+    filename: str
+    extracted_text: str
+    analysis: ReportAnalysisResponse
+
+
 class ReportChatRequest(BaseModel):
     report_text: str
     question: str

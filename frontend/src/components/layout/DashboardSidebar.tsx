@@ -32,6 +32,7 @@ const navItems: Record<string, { label: string; href: string; icon: React.ReactN
   ],
   org: [
     { label: "Dashboard", href: "/org/dashboard", icon: <LayoutDashboard size={20} /> },
+    { label: "Users", href: "/org/users", icon: <Users size={20} /> },
     { label: "Doctors", href: "/org/doctors", icon: <UserSearch size={20} /> },
     { label: "Appointments", href: "/org/appointments", icon: <Calendar size={20} /> },
     { label: "Queues", href: "/org/queues", icon: <ListOrdered size={20} /> },

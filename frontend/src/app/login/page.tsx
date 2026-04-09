@@ -106,12 +106,6 @@ export default function LoginPage() {
             </Link>
           </p>
         </form>
-        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-          <p className="text-xs text-blue-700 font-medium mb-1">Demo accounts:</p>
-          <p className="text-xs text-blue-600">Patient: sardor@mail.uz / demo1234</p>
-          <p className="text-xs text-blue-600">Doctor: dr.karimov@avicenna.uz / demo1234</p>
-          <p className="text-xs text-blue-600">Admin: admin@avicenna.uz / admin1234</p>
-        </div>
       </div>
     </div>
   );

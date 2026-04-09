@@ -1,101 +1,278 @@
+"""
+Medical report analysis endpoints.
+
+Supports raw text (`/report-analysis`), file upload (`/report-upload`), and
+follow-up Q&A (`/report-chat`).
+
+The lab-extraction logic is rule-based: each known analyte has one or more
+regex patterns plus a reference range. When a match is found we emit a
+structured row with status (low/normal/high) and a clinical hint.
+"""
+from __future__ import annotations
+
 import re
-from fastapi import APIRouter
+from typing import Optional
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
 from app.schemas.reports import (
-    ReportAnalysisRequest, ReportAnalysisResponse,
-    ReportChatRequest, ReportChatResponse,
+    ReportAnalysisRequest,
+    ReportAnalysisResponse,
+    ReportChatRequest,
+    ReportChatResponse,
+    ReportUploadResponse,
 )
+from app.services.document_extractor import extract_document_text
 
 router = APIRouter()
 
-# Common lab reference ranges for detection
-_LAB_PATTERNS = {
-    r"hemoglobin[:\s]+(\d+\.?\d*)\s*(g/dl|g/l)": {"name": "Hemoglobin", "low": 12.0, "high": 17.5, "unit": "g/dL"},
-    r"wbc[:\s]+(\d+\.?\d*)\s*(x?\s*10[\^³]?[/\s]*[uμ]?l?)": {"name": "WBC", "low": 4.0, "high": 11.0, "unit": "x10³/μL"},
-    r"platelet[s]?[:\s]+(\d+\.?\d*)": {"name": "Platelets", "low": 150, "high": 400, "unit": "x10³/μL"},
-    r"glucose[:\s]+(\d+\.?\d*)\s*(mg/dl)?": {"name": "Glucose", "low": 70, "high": 100, "unit": "mg/dL"},
-    r"creatinine[:\s]+(\d+\.?\d*)\s*(mg/dl)?": {"name": "Creatinine", "low": 0.6, "high": 1.2, "unit": "mg/dL"},
-    r"cholesterol[:\s]+(\d+\.?\d*)": {"name": "Total Cholesterol", "low": 0, "high": 200, "unit": "mg/dL"},
-    r"hba1c[:\s]+(\d+\.?\d*)\s*%?": {"name": "HbA1c", "low": 4.0, "high": 5.7, "unit": "%"},
-    r"alt[:\s]+(\d+\.?\d*)\s*(u/l|iu/l)?": {"name": "ALT", "low": 7, "high": 56, "unit": "U/L"},
-    r"ast[:\s]+(\d+\.?\d*)\s*(u/l|iu/l)?": {"name": "AST", "low": 10, "high": 40, "unit": "U/L"},
-    r"tsh[:\s]+(\d+\.?\d*)\s*(miu/l|uiu/ml)?": {"name": "TSH", "low": 0.4, "high": 4.0, "unit": "mIU/L"},
-    r"potassium[:\s]+(\d+\.?\d*)\s*(meq/l|mmol/l)?": {"name": "Potassium", "low": 3.5, "high": 5.0, "unit": "mEq/L"},
-    r"sodium[:\s]+(\d+\.?\d*)\s*(meq/l|mmol/l)?": {"name": "Sodium", "low": 136, "high": 145, "unit": "mEq/L"},
-}
 
-_MEDICAL_KEYWORDS = [
-    "abnormal", "elevated", "low", "high", "positive", "negative",
-    "borderline", "critical", "flagged", "out of range", "reactive",
-    "detected", "not detected", "normal", "within limits",
+# ---------------------------------------------------------------------------
+# Knowledge base
+# ---------------------------------------------------------------------------
+class _Analyte:
+    def __init__(
+        self,
+        key: str,
+        name: str,
+        patterns: list[str],
+        low: float,
+        high: float,
+        unit: str,
+        low_hint: str = "",
+        high_hint: str = "",
+    ):
+        self.key = key
+        self.name = name
+        self.patterns = [re.compile(p, re.IGNORECASE) for p in patterns]
+        self.low = low
+        self.high = high
+        self.unit = unit
+        self.low_hint = low_hint
+        self.high_hint = high_hint
+
+
+# Pattern notes:
+#   - `[:\s]+` after the name matches an optional colon/whitespace sequence.
+#   - The capture group is the number; we parse floats with optional decimal.
+_ANALYTES: list[_Analyte] = [
+    _Analyte(
+        "hemoglobin", "Hemoglobin",
+        [r"h[ae]moglobin[:\s]+(\d+\.?\d*)"],
+        12.0, 17.5, "g/dL",
+        low_hint="May indicate anemia — check ferritin, B12, folate.",
+        high_hint="May indicate polycythemia or dehydration.",
+    ),
+    _Analyte(
+        "wbc", "White Blood Cell count",
+        [r"\bwbc[:\s]+(\d+\.?\d*)", r"white\s*blood\s*cell[s]?[:\s]+(\d+\.?\d*)"],
+        4.0, 11.0, "x10³/µL",
+        low_hint="Leukopenia — consider infection, bone marrow suppression, autoimmune disease.",
+        high_hint="Leukocytosis — consider infection, inflammation, leukemia.",
+    ),
+    _Analyte(
+        "platelets", "Platelets",
+        [r"platelet[s]?[:\s]+(\d+\.?\d*)", r"\bplt[:\s]+(\d+\.?\d*)"],
+        150, 400, "x10³/µL",
+        low_hint="Thrombocytopenia — bleeding risk; assess for ITP, liver disease.",
+        high_hint="Thrombocytosis — reactive vs. essential; assess clotting risk.",
+    ),
+    _Analyte(
+        "glucose", "Glucose (fasting)",
+        [r"glucose[:\s]+(\d+\.?\d*)", r"fasting\s+glucose[:\s]+(\d+\.?\d*)"],
+        70, 100, "mg/dL",
+        low_hint="Hypoglycemia — rule out insulin/meds, sepsis, adrenal insufficiency.",
+        high_hint="Consider impaired glucose tolerance or diabetes — confirm with HbA1c.",
+    ),
+    _Analyte(
+        "hba1c", "HbA1c",
+        [r"hba1c[:\s]+(\d+\.?\d*)", r"a1c[:\s]+(\d+\.?\d*)"],
+        4.0, 5.7, "%",
+        high_hint="≥6.5% meets diabetes criteria; 5.7–6.4% is prediabetes.",
+    ),
+    _Analyte(
+        "creatinine", "Creatinine",
+        [r"creatinine[:\s]+(\d+\.?\d*)"],
+        0.6, 1.2, "mg/dL",
+        high_hint="Check eGFR; assess for AKI or CKD progression.",
+    ),
+    _Analyte(
+        "bun", "BUN",
+        [r"\bbun[:\s]+(\d+\.?\d*)", r"urea\s+nitrogen[:\s]+(\d+\.?\d*)"],
+        7, 20, "mg/dL",
+        high_hint="Elevated BUN — consider dehydration, GI bleed, renal dysfunction.",
+    ),
+    _Analyte(
+        "cholesterol_total", "Total Cholesterol",
+        [r"total\s*cholesterol[:\s]+(\d+\.?\d*)", r"cholesterol,\s*total[:\s]+(\d+\.?\d*)"],
+        0, 200, "mg/dL",
+        high_hint="Hypercholesterolemia — assess 10-year ASCVD risk.",
+    ),
+    _Analyte(
+        "ldl", "LDL Cholesterol",
+        [r"\bldl[:\s]+(\d+\.?\d*)"],
+        0, 100, "mg/dL",
+        high_hint="Consider statin therapy based on ASCVD risk.",
+    ),
+    _Analyte(
+        "hdl", "HDL Cholesterol",
+        [r"\bhdl[:\s]+(\d+\.?\d*)"],
+        40, 1000, "mg/dL",
+        low_hint="Low HDL is an independent cardiovascular risk factor.",
+    ),
+    _Analyte(
+        "triglycerides", "Triglycerides",
+        [r"triglycerid[es]+[:\s]+(\d+\.?\d*)"],
+        0, 150, "mg/dL",
+        high_hint="Hypertriglyceridemia — assess for metabolic syndrome.",
+    ),
+    _Analyte(
+        "tsh", "TSH",
+        [r"\btsh[:\s]+(\d+\.?\d*)"],
+        0.4, 4.0, "mIU/L",
+        low_hint="Suppressed TSH — consider hyperthyroidism.",
+        high_hint="Elevated TSH — consider hypothyroidism.",
+    ),
+    _Analyte(
+        "alt", "ALT",
+        [r"\balt[:\s]+(\d+\.?\d*)", r"sgpt[:\s]+(\d+\.?\d*)"],
+        7, 56, "U/L",
+        high_hint="Hepatocellular injury — review meds, hepatitis, NAFLD.",
+    ),
+    _Analyte(
+        "ast", "AST",
+        [r"\bast[:\s]+(\d+\.?\d*)", r"sgot[:\s]+(\d+\.?\d*)"],
+        10, 40, "U/L",
+        high_hint="Hepatic or muscle injury — correlate with ALT, CK.",
+    ),
+    _Analyte(
+        "alp", "Alkaline phosphatase",
+        [r"\balkaline\s+phosphatase[:\s]+(\d+\.?\d*)", r"\balp[:\s]+(\d+\.?\d*)"],
+        44, 147, "U/L",
+        high_hint="Cholestatic pattern — confirm with GGT.",
+    ),
+    _Analyte(
+        "bilirubin", "Total bilirubin",
+        [r"bilirubin[:\s]+(\d+\.?\d*)"],
+        0.1, 1.2, "mg/dL",
+        high_hint="Hyperbilirubinemia — assess direct vs. indirect fraction.",
+    ),
+    _Analyte(
+        "sodium", "Sodium",
+        [r"\bsodium[:\s]+(\d+\.?\d*)", r"\bna\+?[:\s]+(\d+\.?\d*)"],
+        136, 145, "mEq/L",
+        low_hint="Hyponatremia — assess volume status and SIADH risk.",
+        high_hint="Hypernatremia — correct fluid deficit cautiously.",
+    ),
+    _Analyte(
+        "potassium", "Potassium",
+        [r"potassium[:\s]+(\d+\.?\d*)", r"\bk\+?[:\s]+(\d+\.?\d*)"],
+        3.5, 5.0, "mEq/L",
+        low_hint="Hypokalemia — arrhythmia risk; repl.",
+        high_hint="Hyperkalemia — ECG + urgent management if >6.0.",
+    ),
+    _Analyte(
+        "chloride", "Chloride",
+        [r"chloride[:\s]+(\d+\.?\d*)", r"\bcl-?[:\s]+(\d+\.?\d*)"],
+        96, 106, "mEq/L",
+    ),
+    _Analyte(
+        "crp", "C-Reactive Protein",
+        [r"\bcrp[:\s]+(\d+\.?\d*)", r"c[-\s]*reactive[:\s]+(\d+\.?\d*)"],
+        0, 10, "mg/L",
+        high_hint="Elevated CRP — active inflammation/infection.",
+    ),
+    _Analyte(
+        "bp_sys", "Systolic blood pressure",
+        [r"bp[:\s]+(\d{2,3})\s*/\s*\d+"],
+        90, 130, "mmHg",
+        high_hint="Hypertension — lifestyle + consider pharmacologic therapy.",
+        low_hint="Hypotension — symptomatic?",
+    ),
 ]
 
 
-@router.post("/report-analysis", response_model=ReportAnalysisResponse)
-def report_analysis(req: ReportAnalysisRequest):
-    text = req.report_text.lower()
-    key_findings = []
-    abnormal_values = []
-    recommendations = []
+def _analyze_text(report_text: str, patient_context: Optional[str] = None) -> ReportAnalysisResponse:
+    text = report_text or ""
+    key_findings: list[str] = []
+    abnormal_values: list[dict] = []
+    recommendations: list[str] = []
+    seen_keys: set[str] = set()
 
-    # Scan for lab values
-    for pattern, info in _LAB_PATTERNS.items():
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            try:
-                value = float(match.group(1))
-                status = "normal"
-                if value < info["low"]:
-                    status = "low"
-                    key_findings.append(f"{info['name']} is LOW: {value} {info['unit']} (ref: {info['low']}-{info['high']})")
-                    abnormal_values.append({
-                        "parameter": info["name"],
-                        "value": value,
-                        "unit": info["unit"],
-                        "reference_range": f"{info['low']}-{info['high']}",
-                        "status": "low",
-                    })
-                elif value > info["high"]:
-                    status = "high"
-                    key_findings.append(f"{info['name']} is HIGH: {value} {info['unit']} (ref: {info['low']}-{info['high']})")
-                    abnormal_values.append({
-                        "parameter": info["name"],
-                        "value": value,
-                        "unit": info["unit"],
-                        "reference_range": f"{info['low']}-{info['high']}",
-                        "status": "high",
-                    })
-                else:
-                    key_findings.append(f"{info['name']}: {value} {info['unit']} (normal)")
-            except (ValueError, IndexError):
-                pass
+    for analyte in _ANALYTES:
+        if analyte.key in seen_keys:
+            continue
+        value: Optional[float] = None
+        for pattern in analyte.patterns:
+            match = pattern.search(text)
+            if match:
+                try:
+                    value = float(match.group(1))
+                    break
+                except (ValueError, IndexError):
+                    continue
+        if value is None:
+            continue
+        seen_keys.add(analyte.key)
 
-    # Detect medical keywords for summary
-    found_keywords = [kw for kw in _MEDICAL_KEYWORDS if kw in text]
+        ref_range = f"{analyte.low}-{analyte.high} {analyte.unit}"
+        if value < analyte.low:
+            status = "low"
+            key_findings.append(
+                f"{analyte.name} is LOW: {value} {analyte.unit} (ref: {ref_range})"
+            )
+            abnormal_values.append({
+                "parameter": analyte.name,
+                "value": value,
+                "unit": analyte.unit,
+                "reference_range": ref_range,
+                "status": "low",
+                "hint": analyte.low_hint,
+            })
+            if analyte.low_hint:
+                recommendations.append(f"{analyte.name} low → {analyte.low_hint}")
+        elif value > analyte.high:
+            status = "high"
+            key_findings.append(
+                f"{analyte.name} is HIGH: {value} {analyte.unit} (ref: {ref_range})"
+            )
+            abnormal_values.append({
+                "parameter": analyte.name,
+                "value": value,
+                "unit": analyte.unit,
+                "reference_range": ref_range,
+                "status": "high",
+                "hint": analyte.high_hint,
+            })
+            if analyte.high_hint:
+                recommendations.append(f"{analyte.name} high → {analyte.high_hint}")
+        else:
+            key_findings.append(f"{analyte.name}: {value} {analyte.unit} (normal)")
 
-    # Generate summary
     if abnormal_values:
-        abnormal_names = [a["parameter"] for a in abnormal_values]
-        summary = f"Report analysis identified {len(abnormal_values)} abnormal value(s): {', '.join(abnormal_names)}. "
-        summary += "Doctor review recommended for flagged parameters."
-        recommendations.append("Review abnormal values and correlate with clinical presentation")
-        recommendations.append("Consider repeat testing to confirm abnormal findings")
-        for av in abnormal_values:
-            if av["status"] == "high":
-                recommendations.append(f"Investigate elevated {av['parameter']}")
-            else:
-                recommendations.append(f"Investigate low {av['parameter']}")
+        summary = (
+            f"Detected {len(abnormal_values)} abnormal value(s): "
+            f"{', '.join(a['parameter'] for a in abnormal_values)}."
+        )
+        recommendations.insert(
+            0,
+            "Correlate abnormal values with clinical presentation and consider confirmatory testing.",
+        )
     elif key_findings:
-        summary = f"Report analysis found {len(key_findings)} parameter(s), all within normal range."
-        recommendations.append("No immediate action required based on lab values")
-        recommendations.append("Continue routine monitoring as per clinical guidelines")
+        summary = (
+            f"Identified {len(key_findings)} labelled parameter(s); "
+            f"all are within reference range."
+        )
+        recommendations.append("No immediate follow-up indicated on the reported analytes.")
     else:
-        summary = "Unable to extract structured lab values from the report text. Manual review recommended."
-        key_findings.append("No structured lab values detected in report")
-        recommendations.append("Manually review the report for relevant findings")
-        recommendations.append("Consider requesting a clearer or more structured report format")
+        summary = (
+            "Unable to extract structured lab values from the report. "
+            "Manual review recommended."
+        )
+        recommendations.append("Review the report manually for relevant findings.")
 
-    if req.patient_context:
-        summary += f" Patient context: {req.patient_context}"
+    if patient_context:
+        summary += f" Patient context: {patient_context}"
 
     return ReportAnalysisResponse(
         summary=summary,
@@ -105,49 +282,84 @@ def report_analysis(req: ReportAnalysisRequest):
     )
 
 
+@router.post("/report-analysis", response_model=ReportAnalysisResponse)
+def report_analysis(req: ReportAnalysisRequest) -> ReportAnalysisResponse:
+    return _analyze_text(req.report_text, req.patient_context)
+
+
+@router.post("/report-upload", response_model=ReportUploadResponse)
+async def report_upload(
+    file: UploadFile = File(...),
+    patient_context: Optional[str] = Form(None),
+) -> ReportUploadResponse:
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+    try:
+        extracted = extract_document_text(
+            file_bytes,
+            filename=file.filename,
+            content_type=file.content_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not extracted.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Could not extract any text from the document. "
+            "It may be a scanned PDF — OCR is not enabled.",
+        )
+    analysis = _analyze_text(extracted, patient_context)
+    return ReportUploadResponse(
+        filename=file.filename or "report",
+        extracted_text=extracted,
+        analysis=analysis,
+    )
+
+
 @router.post("/report-chat", response_model=ReportChatResponse)
-def report_chat(req: ReportChatRequest):
-    text_lower = req.report_text.lower()
-    question_lower = req.question.lower()
+def report_chat(req: ReportChatRequest) -> ReportChatResponse:
+    report = req.report_text or ""
+    question = (req.question or "").lower()
 
-    relevant_sections = []
-    lines = req.report_text.split("\n")
+    analysis = _analyze_text(report)
 
-    # Find relevant lines based on question keywords
-    q_words = [w for w in question_lower.split() if len(w) > 3]
-    for line in lines:
-        line_lower = line.lower().strip()
-        if not line_lower:
+    relevant_sections: list[str] = []
+    q_words = [w for w in question.split() if len(w) > 3]
+    for line in report.split("\n"):
+        line_str = line.strip()
+        if not line_str:
             continue
-        if any(w in line_lower for w in q_words):
-            relevant_sections.append(line.strip())
+        if any(w in line_str.lower() for w in q_words):
+            relevant_sections.append(line_str)
 
-    # Generate contextual answer
-    if "abnormal" in question_lower or "problem" in question_lower or "issue" in question_lower:
-        abnormals = []
-        for pattern, info in _LAB_PATTERNS.items():
-            match = re.search(pattern, text_lower, re.IGNORECASE)
-            if match:
-                try:
-                    value = float(match.group(1))
-                    if value < info["low"] or value > info["high"]:
-                        status = "low" if value < info["low"] else "high"
-                        abnormals.append(f"{info['name']}: {value} {info['unit']} ({status})")
-                except (ValueError, IndexError):
-                    pass
-        if abnormals:
-            answer = f"The following abnormal values were found: {'; '.join(abnormals)}. These should be reviewed in the clinical context."
+    if "abnormal" in question or "problem" in question or "issue" in question or "wrong" in question:
+        if analysis.abnormal_values:
+            detail = "; ".join(
+                f"{av['parameter']} {av['value']} {av['unit']} ({av['status']})"
+                for av in analysis.abnormal_values
+            )
+            answer = f"The following values are flagged: {detail}."
         else:
-            answer = "No clearly abnormal lab values were identified in the report text."
-    elif "normal" in question_lower:
-        answer = "Values within reference ranges are considered normal. However, 'normal' should always be interpreted in the patient's clinical context."
-    elif "recommend" in question_lower or "suggest" in question_lower or "next" in question_lower:
-        answer = "Based on the report, consider correlating findings with clinical symptoms, repeating any borderline values, and consulting relevant specialists for abnormal results."
+            answer = "No clearly abnormal lab values were identified."
+    elif "recommend" in question or "next" in question or "do" in question:
+        if analysis.recommendations:
+            answer = "Suggested next steps: " + "; ".join(analysis.recommendations[:5])
+        else:
+            answer = "No specific recommendations beyond correlating with the clinical picture."
+    elif "summary" in question or "overall" in question:
+        answer = analysis.summary
     else:
         if relevant_sections:
-            answer = f"Based on the report, the relevant information is: {' | '.join(relevant_sections[:5])}."
+            answer = (
+                "Relevant excerpts from the report: "
+                + " | ".join(relevant_sections[:5])
+            )
         else:
-            answer = "I could not find specific information matching your question in the report. Please try rephrasing or asking about specific parameters."
+            answer = (
+                "I couldn't find a direct match for your question in the report. "
+                "Try asking about a specific parameter (e.g. hemoglobin, glucose)."
+            )
 
     return ReportChatResponse(
         answer=answer,

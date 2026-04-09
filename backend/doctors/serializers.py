@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from organizations.models import Specialty
 from organizations.serializers import SpecialtySerializer
 
 from .models import DoctorProfile, DoctorSpecialty
@@ -17,16 +18,23 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
     specialties = DoctorSpecialtySerializer(many=True, read_only=True)
     specialty_ids = serializers.PrimaryKeyRelatedField(
         many=True, write_only=True, required=False,
-        queryset=__import__('organizations.models', fromlist=['Specialty']).Specialty.objects.all(),
+        queryset=Specialty.objects.all(),
         source='_specialty_ids',
     )
 
     class Meta:
         model = DoctorProfile
         fields = [
-            'id', 'user', 'organization', 'full_name', 'bio',
-            'years_experience', 'consultation_fee', 'public_slug',
-            'is_verified', 'is_active', 'avatar', 'languages',
+            'id', 'user', 'organization',
+            'full_name', 'gender', 'position', 'avatar',
+            'years_experience', 'education', 'license_number', 'license_document',
+            'working_history',
+            'bio', 'languages', 'services',
+            'consultation_fee', 'consultation_duration_minutes',
+            'working_hours', 'accepts_new_patients',
+            'id_document', 'agreed_to_terms', 'is_verified',
+            'ai_enabled', 'ai_feature_flags',
+            'public_slug', 'is_active', 'is_public',
             'created_at', 'specialties', 'specialty_ids',
         ]
         read_only_fields = ['created_at']
