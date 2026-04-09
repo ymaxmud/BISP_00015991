@@ -5,8 +5,25 @@ import secrets
 from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import generics, permissions, serializers, status, viewsets
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+
+
+class OptionalJWTAuthentication(JWTAuthentication):
+    """
+    Like JWTAuthentication but silently ignores invalid / expired tokens
+    instead of raising 401. This lets public endpoints work even when the
+    browser sends a stale token from a previous session.
+    """
+
+    def authenticate(self, request):
+        try:
+            return super().authenticate(request)
+        except (InvalidToken, TokenError):
+            return None
 
 from accounts.models import User
 from organizations.models import Organization, Specialty, StaffRole
@@ -20,6 +37,7 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         'user', 'organization'
     ).prefetch_related('specialties__specialty').all()
     serializer_class = DoctorProfileSerializer
+    authentication_classes = [OptionalJWTAuthentication, SessionAuthentication]
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     lookup_field = 'public_slug'
     filterset_fields = ['organization', 'is_verified', 'is_active', 'is_public']
