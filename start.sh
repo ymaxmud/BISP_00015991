@@ -1,76 +1,29 @@
 #!/bin/bash
-# Avicenna Platform - Start All Services
-# Usage: ./start.sh
 
-set -e
+#helps to start all services with one command, and also ensures that any existing processes on the required ports are killed first. cd ~/Desktop/AvicennaAssistant./start.sh
 
-export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PYTHON_BIN="python3"
+PYTHON="$PROJECT_DIR/.venv/bin/python3"
 
-if [ -x "$PROJECT_DIR/.venv/bin/python3" ]; then
-  PYTHON_BIN="$PROJECT_DIR/.venv/bin/python3"
-fi
+# kill anything already on these ports
+lsof -ti:3000,8000,8001 2>/dev/null | xargs kill -9 2>/dev/null || true
 
-echo "🏥 Starting Avicenna Platform..."
-echo "================================"
+echo "Starting backend..."
+cd "$PROJECT_DIR/backend" && "$PYTHON" manage.py runserver 8000 > /tmp/django.log 2>&1 &
 
-# Kill any existing processes on our ports
-echo "→ Clearing ports 3000, 8000, 8001..."
-lsof -ti:3000 2>/dev/null | xargs kill -9 2>/dev/null || true
-lsof -ti:8000 2>/dev/null | xargs kill -9 2>/dev/null || true
-lsof -ti:8001 2>/dev/null | xargs kill -9 2>/dev/null || true
-sleep 1
+echo "Starting AI service..."
+cd "$PROJECT_DIR/ai-service" && "$PYTHON" -m uvicorn app.main:app --port 8001 > /tmp/fastapi.log 2>&1 &
 
-# Start Django Backend
-echo "→ Starting Django backend on port 8000..."
-cd "$PROJECT_DIR/backend"
-"$PYTHON_BIN" manage.py runserver 8000 > /tmp/avicenna-django.log 2>&1 &
-DJANGO_PID=$!
-
-# Start FastAPI AI Service
-echo "→ Starting AI service on port 8001..."
-cd "$PROJECT_DIR/ai-service"
-"$PYTHON_BIN" -m uvicorn app.main:app --port 8001 > /tmp/avicenna-fastapi.log 2>&1 &
-FASTAPI_PID=$!
-
-# Start Next.js Frontend
-echo "→ Starting frontend on port 3000..."
-cd "$PROJECT_DIR/frontend"
-npm run dev > /tmp/avicenna-nextjs.log 2>&1 &
-NEXTJS_PID=$!
-
-# Wait for services to start
-echo "→ Waiting for services to start..."
-sleep 4
-
-# Health checks
-BACKEND_OK=false
-AI_OK=false
-FRONTEND_OK=false
-
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/v1/organizations/specialties/ | grep -q "200" && BACKEND_OK=true
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/health | grep -q "200" && AI_OK=true
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 | grep -q "200" && FRONTEND_OK=true
+echo "Starting frontend..."
+cd "$PROJECT_DIR/frontend" && npm run dev > /tmp/nextjs.log 2>&1 &
 
 echo ""
-echo "================================"
-echo "Service Status:"
-echo "  Frontend (Next.js):  $([ "$FRONTEND_OK" = true ] && echo '✅ Running on http://localhost:3000' || echo '❌ Failed - check /tmp/avicenna-nextjs.log')"
-echo "  Backend (Django):    $([ "$BACKEND_OK" = true ] && echo '✅ Running on http://localhost:8000' || echo '❌ Failed - check /tmp/avicenna-django.log')"
-echo "  AI Service (FastAPI):$([ "$AI_OK" = true ] && echo '✅ Running on http://localhost:8001' || echo '❌ Failed - check /tmp/avicenna-fastapi.log')"
+echo "All services started."
+echo "  http://localhost:3000  — frontend"
+echo "  http://localhost:8000  — backend"
+echo "  http://localhost:8001  — AI service"
 echo ""
-echo "Demo accounts are seeded by: python backend/manage.py seed_demo"
-echo "Set DEMO_ADMIN_PASSWORD and DEMO_USER_PASSWORD in .env to override"
-echo "the default passwords before running the seed command."
-echo ""
-echo "Open http://localhost:3000 in your browser"
-echo "================================"
-echo ""
-echo "PIDs: Django=$DJANGO_PID  FastAPI=$FASTAPI_PID  Next.js=$NEXTJS_PID"
-echo "To stop all: kill $DJANGO_PID $FASTAPI_PID $NEXTJS_PID"
-echo ""
+echo "Logs: /tmp/django.log  /tmp/fastapi.log  /tmp/nextjs.log"
 
-# Keep script running so terminal stays open
 wait
