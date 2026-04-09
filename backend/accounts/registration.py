@@ -196,6 +196,7 @@ class PatientRegistrationSerializer(serializers.Serializer):
 
 class PatientRegistrationView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def post(self, request):
@@ -364,6 +365,7 @@ class DoctorRegistrationSerializer(serializers.Serializer):
 
 class DoctorRegistrationView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def post(self, request):
@@ -503,6 +505,7 @@ class ClinicAdminRegistrationSerializer(serializers.Serializer):
 
 class ClinicAdminRegistrationView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def post(self, request):
