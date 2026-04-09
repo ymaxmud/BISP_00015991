@@ -55,6 +55,14 @@ export const auth = {
       `${API_BASE}/auth/login/`,
       { method: "POST", body: JSON.stringify(data) }
     ),
+  supabaseSync: (accessToken: string) =>
+    request<{ access: string; refresh: string; user: any; created: boolean }>(
+      `${API_BASE}/auth/supabase/sync/`,
+      {
+        method: "POST",
+        body: JSON.stringify({ access_token: accessToken }),
+      }
+    ),
   me: () =>
     request<{
       id: number;
@@ -265,6 +273,20 @@ export const ai = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  reportUpload: async (file: File, patientContext?: string) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (patientContext) formData.append("patient_context", patientContext);
+    const res = await fetch(`${AI_BASE}/report-upload`, {
+      method: "POST",
+      body: formData,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(json.detail || JSON.stringify(json) || res.statusText);
+    }
+    return json;
+  },
   reportChat: (data: {
     report_text: string;
     question: string;
