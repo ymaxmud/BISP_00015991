@@ -95,7 +95,7 @@ export default function DoctorProfilePage() {
       <Navbar />
 
       <main className="flex-1 bg-gray-50">
-        {/* Back link */}
+        {/* Easy way back to the doctor listing without forcing a browser back action. */}
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
           <Link
             href="/doctors"
@@ -106,7 +106,8 @@ export default function DoctorProfilePage() {
           </Link>
         </div>
 
-        {/* Doctor Header */}
+        {/* Top profile card with the details most patients look for first:
+            name, specialties, clinic, and trust signals. */}
         <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Card>
             <CardContent className="py-8">
@@ -151,7 +152,7 @@ export default function DoctorProfilePage() {
           </Card>
         </section>
 
-        {/* Stats Row */}
+        {/* Quick factual stats for confidence and booking context. */}
         <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Card>
@@ -195,7 +196,7 @@ export default function DoctorProfilePage() {
           </div>
         </section>
 
-        {/* Bio + Education */}
+        {/* Longer profile details for users who want to read before booking. */}
         <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
           <Card>
             <CardHeader>
@@ -238,7 +239,8 @@ export default function DoctorProfilePage() {
           </Card>
         </section>
 
-        {/* Reviews */}
+        {/* Reviews sit in their own section so they read like social proof,
+            not just another bullet inside the doctor bio. */}
         <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
           <Card>
             <CardHeader>
@@ -277,7 +279,7 @@ export default function DoctorProfilePage() {
           </Card>
         </section>
 
-        {/* Book CTA */}
+        {/* Final booking prompt after the patient has read profile and reviews. */}
         <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
           <Card className="bg-gradient-to-r from-teal-50 to-cyan-50 border-teal-100">
             <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
