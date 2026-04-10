@@ -17,9 +17,7 @@ import {
 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
+/* These types describe what the queue UI expects from each patient row. */
 
 type TriageLevel = "urgent" | "priority" | "normal";
 type PatientStatus = "waiting" | "called" | "in_consultation" | "completed";
@@ -36,9 +34,7 @@ interface Patient {
   details: string;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Initial data                                                       */
-/* ------------------------------------------------------------------ */
+/* This is demo queue data so the screen has something realistic to render. */
 
 const initialQueue: Patient[] = [
   { id: 1, num: 1, patient: "Bobur Yusupov", complaint: "Follow-up for heart condition", triage: "urgent", wait: 5, status: "waiting", allergies: "Penicillin", details: "History of atrial fibrillation. On warfarin. Last echo showed EF 45%." },
@@ -51,9 +47,7 @@ const initialQueue: Patient[] = [
   { id: 8, num: 8, patient: "Malika Ergasheva", complaint: "Skin rash on arms", triage: "normal", wait: 48, status: "waiting", allergies: "Iodine", details: "Bilateral forearm rash for 5 days. Itchy, raised. New detergent started recently." },
 ];
 
-/* ------------------------------------------------------------------ */
-/*  Constants                                                          */
-/* ------------------------------------------------------------------ */
+/* These constants control queue ordering, labels, and visual styles. */
 
 const TRIAGE_ORDER: Record<TriageLevel, number> = { urgent: 0, priority: 1, normal: 2 };
 const AVG_CONSULT_MIN = 12;
@@ -77,9 +71,7 @@ const triageBorder: Record<TriageLevel, string> = {
   normal: "border-l-4 border-l-transparent",
 };
 
-/* ------------------------------------------------------------------ */
-/*  Component                                                          */
-/* ------------------------------------------------------------------ */
+/* The page below is basically a small queue-management dashboard. */
 
 export default function QueuePage() {
   const router = useRouter();
@@ -89,23 +81,24 @@ export default function QueuePage() {
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
   const [flashIds, setFlashIds] = useState<Set<number>>(new Set());
 
-  /* ---------- derived / memoised values ---------- */
+  /* Everything in this block is derived from the raw queue state.
+     We memoise it so we are not recalculating the same sorting work on every render. */
 
   const sorted = useMemo(() => {
     return [...queue].sort((a, b) => {
-      // completed always last
+      // Finished patients should stay at the bottom so active work stays visible first.
       if (a.status === "completed" && b.status !== "completed") return 1;
       if (b.status === "completed" && a.status !== "completed") return -1;
-      // in_consultation next-to-last
+      // Someone already in consultation should also stay lower than people still waiting.
       if (a.status === "in_consultation" && b.status !== "in_consultation" && b.status !== "completed") return 1;
       if (b.status === "in_consultation" && a.status !== "in_consultation" && a.status !== "completed") return -1;
-      // called first
+      // If a patient has already been called, keep them near the top.
       if (a.status === "called" && b.status !== "called") return -1;
       if (b.status === "called" && a.status !== "called") return 1;
-      // then by triage
+      // After status rules, urgency decides the order.
       const triageDiff = TRIAGE_ORDER[a.triage] - TRIAGE_ORDER[b.triage];
       if (triageDiff !== 0) return triageDiff;
-      // then by wait (longer wait = higher priority)
+      // If urgency is the same, the longer-waiting patient should come first.
       return b.wait - a.wait;
     });
   }, [queue]);
@@ -125,7 +118,7 @@ export default function QueuePage() {
 
   const isQueueEmpty = activePatients.length === 0;
 
-  /* ---------- helpers ---------- */
+  /* Small helper functions for UI behavior and wait-time estimation. */
 
   const triggerFlash = useCallback((id: number) => {
     setFlashIds((prev) => new Set(prev).add(id));
@@ -144,7 +137,8 @@ export default function QueuePage() {
       if (patient.status === "in_consultation") return "Now";
       if (patient.status === "called") return "Next";
 
-      // count patients ahead in the sorted active queue
+      // We estimate wait by counting how many active patients are still ahead
+      // in the queue and multiplying by the average consultation time.
       const activeQueue = sorted.filter(
         (q) => q.status === "waiting" || q.status === "called"
       );
@@ -156,11 +150,11 @@ export default function QueuePage() {
     [sorted]
   );
 
-  /* ---------- actions ---------- */
+  /* User actions that change queue state live here. */
 
   const callNext = useCallback(() => {
     setQueue((prev) => {
-      // find next waiting patient by triage priority
+      // We always call the highest-priority waiting patient first.
       const waitingSorted = [...prev]
         .filter((q) => q.status === "waiting")
         .sort((a, b) => {
@@ -194,7 +188,8 @@ export default function QueuePage() {
     setQueue((prev) => {
       const patient = prev.find((q) => q.id === id);
       if (!patient) return prev;
-      // Move to end by resetting wait to 0 (lowest priority in sort)
+      // Skipping means the patient goes back into waiting state and loses
+      // their current wait advantage, so they naturally drop lower in the sort.
       return prev.map((q) =>
         q.id === id ? { ...q, wait: 0, status: "waiting" as PatientStatus } : q
       );
@@ -206,7 +201,7 @@ export default function QueuePage() {
     setConfirmRemoveId(null);
   }, []);
 
-  /* ---------- row styles ---------- */
+  /* This helper keeps the JSX cleaner by putting all row-color logic in one place. */
 
   const getRowClasses = (q: Patient) => {
     const base = "transition-all duration-300";
@@ -221,13 +216,11 @@ export default function QueuePage() {
     return `${base} ${border} hover:bg-gray-50/50 ${flash}`;
   };
 
-  /* ---------------------------------------------------------------- */
-  /*  Render                                                           */
-  /* ---------------------------------------------------------------- */
+  /* Everything below is just the actual rendered queue screen. */
 
   return (
     <div>
-      {/* Custom keyframes */}
+      {/* These keyframes are only for this page, so we keep them close to the component. */}
       <style jsx global>{`
         @keyframes flash-highlight {
           0% { background-color: rgba(20, 184, 166, 0.3); }
@@ -246,7 +239,7 @@ export default function QueuePage() {
         }
       `}</style>
 
-      {/* Header */}
+      {/* Top actions and page title. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <h1 className="text-2xl font-bold text-secondary">Smart Queue</h1>
         <button
@@ -259,7 +252,7 @@ export default function QueuePage() {
         </button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Quick queue summary cards. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-teal-50 flex items-center justify-center">
