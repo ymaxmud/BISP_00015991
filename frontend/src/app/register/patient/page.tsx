@@ -47,7 +47,8 @@ export default function PatientRegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Account
+  // These state groups follow the exact order of the registration wizard, so
+  // it is easier to connect each input on screen to the payload we send later.
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -57,19 +58,19 @@ export default function PatientRegisterPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
 
-  // Family
+  // Family step.
   const [family, setFamily] = useState<FamilyMember[]>([]);
 
-  // Vitals
+  // Vitals step.
   const [heightCm, setHeightCm] = useState("");
   const [weightKg, setWeightKg] = useState("");
 
-  // Lifestyle
+  // Lifestyle step.
   const [smoking, setSmoking] = useState("");
   const [alcohol, setAlcohol] = useState("");
   const [activity, setActivity] = useState("");
 
-  // Health history
+  // Health-history step.
   const [chronic, setChronic] = useState<string[]>([]);
   const [chronicOther, setChronicOther] = useState("");
   const [allergies, setAllergies] = useState("");
@@ -78,12 +79,12 @@ export default function PatientRegisterPage() {
     { name: "", dosage: "" },
   ]);
 
-  // Symptoms
+  // Symptoms step.
   const [symptomText, setSymptomText] = useState("");
   const [symptomDuration, setSymptomDuration] = useState("");
   const [symptomSeverity, setSymptomSeverity] = useState("");
 
-  // Health report
+  // Optional report upload step.
   const [reportFile, setReportFile] = useState<File | null>(null);
   const [reportAnalysis, setReportAnalysis] = useState<any>(null);
   const [analysingReport, setAnalysingReport] = useState(false);
@@ -197,8 +198,9 @@ export default function PatientRegisterPage() {
       localStorage.setItem("user_role", data.user.role);
       localStorage.setItem("user_data", JSON.stringify(data.user));
 
-      // Upload health report if one was attached — runs best-effort so the
-      // user still lands on the dashboard even if the upload fails.
+      // The account itself is the important part. If the report upload fails,
+      // we still let the patient into the dashboard instead of treating the
+      // whole registration as failed.
       if (reportFile) {
         try {
           const form = new FormData();
@@ -210,7 +212,7 @@ export default function PatientRegisterPage() {
             body: form,
           });
         } catch {
-          /* ignore */
+          /* We ignore upload failure here on purpose so registration still succeeds. */
         }
       }
 
