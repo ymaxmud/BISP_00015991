@@ -1,6 +1,9 @@
 """
-Risk Triage Agent -- rule-based urgency scoring for incoming cases.
-No external LLM calls; all logic is deterministic.
+This agent gives a simple urgency score to a case.
+
+It is intentionally deterministic and rule-based. That makes it easier to
+debug, easier to trust, and still usable even if no external model is
+available.
 """
 
 from dataclasses import dataclass, field
@@ -13,7 +16,8 @@ class TriageResult:
     triage_notes: str = ""
 
 
-# ------------------------------------------------------------------ keyword maps
+# These keyword groups are the heart of the triage score.
+# Each match adds points, and more serious phrases add more points.
 
 _CRITICAL_KEYWORDS: dict[str, str] = {
     "chest pain": "Chest pain may indicate acute coronary syndrome",
@@ -76,8 +80,11 @@ _MEDIUM_KEYWORDS: dict[str, str] = {
 
 
 class RiskTriageAgent:
-    """Scores urgency of a clinical presentation using keyword matching
-    and demographic risk factors."""
+    """Estimate urgency from symptoms, severity, age, and history.
+
+    This is not trying to replace clinical judgment. It is just a fast first
+    pass that helps the rest of the system decide how worried it should be.
+    """
 
     def assess(
         self,
@@ -95,12 +102,14 @@ class RiskTriageAgent:
             history or "",
         ]).lower()
 
-        # Accumulate a numeric risk score and collect flags / notes
+        # We keep both a raw score and human-readable notes, because the UI
+        # needs more than just "high" or "low" if a doctor wants context.
         risk_score = 0
         red_flags: list[str] = []
         notes_parts: list[str] = []
 
-        # --- Keyword scanning ---
+        # Keyword matches are the first pass. Obvious emergency phrases should
+        # push the score up immediately.
         for kw, msg in _CRITICAL_KEYWORDS.items():
             if kw in combined_text:
                 risk_score += 3
@@ -115,7 +124,8 @@ class RiskTriageAgent:
             if kw in combined_text:
                 risk_score += 1
 
-        # --- Severity modifier ---
+        # Patient-reported severity is not perfect, but it still matters.
+        # Someone describing the case as severe should move the score upward.
         severity_lower = (severity or "").lower()
         if severity_lower in ("severe", "critical", "emergency", "10", "9"):
             risk_score += 2
@@ -123,7 +133,8 @@ class RiskTriageAgent:
         elif severity_lower in ("moderate", "7", "8"):
             risk_score += 1
 
-        # --- Age-based adjustment ---
+        # Very young and older patients generally need a lower threshold for
+        # escalation, so we give them a small risk bump.
         if age < 5:
             risk_score += 1
             notes_parts.append("Pediatric patient (under 5) -- lower threshold for escalation.")
@@ -131,14 +142,16 @@ class RiskTriageAgent:
             risk_score += 1
             notes_parts.append("Geriatric patient (over 65) -- increased baseline risk.")
 
-        # --- Duration adjustment ---
+        # Sudden or very recent onset usually deserves a bit more attention
+        # than long-stable symptoms.
         duration_lower = (duration or "").lower()
         acute_markers = ["sudden", "minutes", "hours", "just started", "acute", "today"]
         if any(m in duration_lower for m in acute_markers):
             risk_score += 1
             notes_parts.append("Acute onset reported.")
 
-        # --- Map score to urgency level ---
+        # After all the little adjustments, translate the total score into one
+        # urgency bucket that the rest of the system can use.
         if risk_score >= 5:
             urgency = "critical"
         elif risk_score >= 3:
@@ -148,7 +161,8 @@ class RiskTriageAgent:
         else:
             urgency = "low"
 
-        # Build triage notes
+        # These notes are meant to explain "why" the urgency ended up here,
+        # not just dump a label.
         notes_parts.insert(0, f"Triage risk score: {risk_score} -> urgency '{urgency}'.")
         if red_flags:
             notes_parts.append(f"{len(red_flags)} red flag(s) identified.")
