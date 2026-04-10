@@ -19,9 +19,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// These types describe the data shape this page uses for cards, tabs, and modals.
 
 type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 type TabKey = "upcoming" | "past" | "cancelled";
@@ -38,9 +36,8 @@ interface Appointment {
   notes?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Seed data
-// ---------------------------------------------------------------------------
+// This page still uses seeded UI data, so the booking and viewing flow can be
+// demonstrated even before the full backend integration is wired in.
 
 const initialAppointments: Appointment[] = [
   {
@@ -148,7 +145,7 @@ export default function AppointmentsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("upcoming");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Book modal
+  // Booking state is kept together here so the modal can reset cleanly after success.
   const [showBookModal, setShowBookModal] = useState(false);
   const [bookDoctor, setBookDoctor] = useState("");
   const [bookDate, setBookDate] = useState("");
@@ -157,13 +154,14 @@ export default function AppointmentsPage() {
   const [bookNotes, setBookNotes] = useState("");
   const [bookSuccess, setBookSuccess] = useState(false);
 
-  // Cancel confirm
+  // This stores which appointment is currently being confirmed for cancellation.
   const [cancelId, setCancelId] = useState<string | null>(null);
 
-  // View detail
+  // This controls the slide-out details panel on the right.
   const [viewApt, setViewApt] = useState<Appointment | null>(null);
 
   function filterByTab(tab: TabKey): Appointment[] {
+    // First narrow by tab, then apply the search term to the smaller list.
     let result: Appointment[];
     switch (tab) {
       case "upcoming":
@@ -197,6 +195,8 @@ export default function AppointmentsPage() {
   const tabCounts: Record<TabKey, number> = { upcoming: upcomingCount, past: pastCount, cancelled: cancelledCount };
 
   function handleBookSubmit() {
+    // Right now booking is local-only UI state. We build a new appointment card
+    // in memory so the page still behaves like a real booking flow.
     if (!bookDoctor || !bookDate || !bookTime) return;
     const doc = doctorOptions.find((d) => d.name === bookDoctor);
     const newApt: Appointment = {
@@ -232,7 +232,7 @@ export default function AppointmentsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page title plus the main booking action. */}
       <div className="flex items-center justify-between gap-4 pl-12 md:pl-0">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Appointments</h1>
@@ -243,7 +243,7 @@ export default function AppointmentsPage() {
         </Button>
       </div>
 
-      {/* Search */}
+      {/* Quick text search by doctor, specialty, or clinic. */}
       <div className="relative max-w-sm">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
         <input
@@ -255,7 +255,7 @@ export default function AppointmentsPage() {
         />
       </div>
 
-      {/* Tabs */}
+      {/* Tabs split the appointment list into the three main user states. */}
       <div className="flex gap-1 border-b border-gray-200 pb-0">
         {tabs.map((tab) => (
           <button
@@ -277,7 +277,7 @@ export default function AppointmentsPage() {
         ))}
       </div>
 
-      {/* Appointment Cards */}
+      {/* Main appointment listing area. */}
       {filtered.length === 0 ? (
         <div className="text-center py-16">
           <Calendar size={48} className="mx-auto text-gray-200 mb-4" />
@@ -373,14 +373,12 @@ export default function AppointmentsPage() {
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* BOOK APPOINTMENT MODAL                                             */}
-      {/* ================================================================= */}
+      {/* Booking happens in a modal so the user does not leave the appointments page. */}
       {showBookModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setShowBookModal(false); setBookSuccess(false); }} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            {/* Header */}
+            {/* Modal header. */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-foreground">Book New Appointment</h2>
               <button onClick={() => { setShowBookModal(false); setBookSuccess(false); }} className="p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-gray-100 transition-colors">
@@ -398,7 +396,7 @@ export default function AppointmentsPage() {
               </div>
             ) : (
               <div className="px-6 py-5 space-y-5">
-                {/* Doctor */}
+                {/* Doctor choice also determines the clinic/specialty hint shown below. */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Select Doctor <span className="text-red-500">*</span>
@@ -422,7 +420,7 @@ export default function AppointmentsPage() {
                   )}
                 </div>
 
-                {/* Date */}
+                {/* Date selection for the visit. */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Preferred Date <span className="text-red-500">*</span>
@@ -436,7 +434,7 @@ export default function AppointmentsPage() {
                   />
                 </div>
 
-                {/* Time */}
+                {/* Time slot buttons make picking feel faster than a dropdown. */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Preferred Time <span className="text-red-500">*</span>
@@ -458,7 +456,7 @@ export default function AppointmentsPage() {
                   </div>
                 </div>
 
-                {/* Type */}
+                {/* In-person vs video appointment mode. */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Appointment Type
@@ -487,7 +485,7 @@ export default function AppointmentsPage() {
                   </div>
                 </div>
 
-                {/* Notes */}
+                {/* Optional context for the clinic about the reason for the visit. */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Notes (optional)
@@ -503,7 +501,7 @@ export default function AppointmentsPage() {
               </div>
             )}
 
-            {/* Footer */}
+            {/* Modal actions. */}
             {!bookSuccess && (
               <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
                 <Button variant="ghost" onClick={() => setShowBookModal(false)}>Cancel</Button>
@@ -519,9 +517,7 @@ export default function AppointmentsPage() {
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* CANCEL CONFIRMATION MODAL                                          */}
-      {/* ================================================================= */}
+      {/* Separate confirmation so cancellation is not too easy to trigger by mistake. */}
       {cancelId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setCancelId(null)} />
@@ -545,9 +541,8 @@ export default function AppointmentsPage() {
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* VIEW DETAILS SLIDE-OUT                                             */}
-      {/* ================================================================= */}
+      {/* The details panel slides in so the user can inspect one appointment
+          without losing the main list context. */}
       {viewApt && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewApt(null)} />
