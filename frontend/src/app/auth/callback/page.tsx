@@ -23,8 +23,9 @@ export default function AuthCallbackPage() {
       try {
         const supabase = getSupabase();
 
-        // Supabase SDK parses the URL hash/code and stores the session
-        // automatically (detectSessionInUrl: true). Give it a tick.
+        // Supabase handles the OAuth callback details for us, but it still
+        // needs a tiny moment to finish reading the URL and storing the
+        // session in the browser.
         await new Promise((r) => setTimeout(r, 300));
 
         const {
@@ -37,7 +38,8 @@ export default function AuthCallbackPage() {
           throw new Error("No Supabase session — did you cancel sign-in?");
         }
 
-        // Exchange the Supabase token for a Django JWT.
+        // Our backend still uses Django JWTs for the actual app API, so after
+        // Google login we swap the Supabase token for our normal backend token.
         const data = await auth.supabaseSync(session.access_token);
         if (cancelled) return;
 
