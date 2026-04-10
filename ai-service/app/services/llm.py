@@ -1,9 +1,10 @@
 """
-Thin wrapper around the OpenAI Chat Completions API.
+This file is a very small wrapper around OpenAI.
 
-The rest of the service should call `chat()` and treat a `None` return as
-"LLM unavailable, fall back to rule-based logic". That keeps every endpoint
-working when the key is missing or the API call fails.
+The main idea is simple: the rest of the AI service should call `chat()`
+without worrying about SDK setup or crash handling. If OpenAI is not
+configured, or the request fails, we quietly return `None` so the caller can
+fall back to the normal rule-based logic instead of breaking the whole feature.
 """
 from __future__ import annotations
 
@@ -40,7 +41,12 @@ def chat(
     temperature: float = 0.2,
     max_tokens: int = 600,
 ) -> Optional[str]:
-    """Return assistant text, or None if the LLM is unavailable."""
+    """Try to get a text answer from the LLM.
+
+    If anything goes wrong, we return `None` on purpose. That way the caller
+    can keep going with a safer fallback instead of throwing a user-facing
+    error just because the model call failed.
+    """
     client = _get_client()
     if client is None:
         return None
