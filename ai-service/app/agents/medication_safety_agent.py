@@ -1,15 +1,19 @@
 """
-Medication Safety Agent -- checks for drug-drug interactions and
-allergy cross-reactivity. All logic is rule-based with a built-in
-knowledge base of common interactions.
+This agent checks the medication list for obvious safety problems.
+
+Right now the logic is all rule-based and comes from a built-in knowledge
+base. That makes the behavior predictable and easy to inspect when you want
+to understand why something was flagged.
 """
 
 from app.schemas.case_analysis import MedicationSafetyResponse
 
 
-# Each entry: (drug_a, drug_b, risk_description, severity)
-# Matching is case-insensitive and substring-based so that
-# "warfarin sodium" still matches the "warfarin" rule.
+# Each row is:
+# (drug_a, drug_b, explanation, severity)
+#
+# Matching is intentionally loose and substring-based. For example,
+# "warfarin sodium" should still match the simpler "warfarin" rule.
 _INTERACTION_PAIRS: list[tuple[str, str, str, str]] = [
     ("warfarin", "aspirin",
      "Concurrent use increases bleeding risk significantly", "high"),
@@ -106,8 +110,8 @@ _INTERACTION_PAIRS: list[tuple[str, str, str, str]] = [
 ]
 
 
-# Allergy cross-reactivity map.
-# Key = reported allergy (lowered), values = drugs that should be flagged.
+# This table is for "not the exact same drug, but still risky because it is
+# related to the reported allergy" situations.
 _ALLERGY_CROSS_REFERENCE: dict[str, list[tuple[str, str]]] = {
     "penicillin": [
         ("amoxicillin", "Amoxicillin is a penicillin-class antibiotic -- cross-reactivity risk"),
@@ -164,7 +168,7 @@ _ALLERGY_CROSS_REFERENCE: dict[str, list[tuple[str, str]]] = {
 
 
 class MedicationSafetyAgent:
-    """Checks for drug-drug interactions and allergy cross-reactivity."""
+    """Check the meds list for interactions, allergy issues, and duplicates."""
 
     def check(
         self,
@@ -179,18 +183,21 @@ class MedicationSafetyAgent:
         proposed_lower = [m.lower().strip() for m in proposed_medications if m.strip()]
         allergies_lower = [a.lower().strip() for a in allergies if a.strip()]
 
-        # --- Drug-drug interaction checks ---
+        # First we look for medication combinations that already have known
+        # interaction rules in our built-in table.
         interaction_alerts = self._check_interactions(all_meds, proposed_lower)
         alerts.extend(interaction_alerts)
 
-        # --- Allergy cross-reactivity checks ---
+        # Then we look for direct allergy problems and "same family /
+        # cross-reactive" problems.
         allergy_alerts = self._check_allergy_cross_reactivity(
             proposed_lower + [m.lower().strip() for m in current_medications if m.strip()],
             allergies_lower,
         )
         alerts.extend(allergy_alerts)
 
-        # --- Recommendations ---
+        # Recommendations are written in a way the UI can show directly
+        # without having to generate extra explanation text.
         if interaction_alerts:
             recommendations.append(
                 "Review flagged drug interactions with the prescribing physician."
@@ -207,7 +214,8 @@ class MedicationSafetyAgent:
                 "up-to-date pharmacological references."
             )
 
-        # Duplicate-medication check
+        # Duplicate entries are not always dangerous, but they are worth
+        # surfacing because they often mean the med list is messy or wrong.
         seen: set[str] = set()
         for med in all_meds:
             if med in seen:
@@ -232,7 +240,7 @@ class MedicationSafetyAgent:
             recommendations=recommendations,
         )
 
-    # ------------------------------------------------------------------ #
+    # The helpers below keep the main `check()` function short enough to scan.
 
     @staticmethod
     def _check_interactions(
@@ -252,7 +260,8 @@ class MedicationSafetyAgent:
                     continue
                 seen_pairs.add(pair_key)
 
-                # Determine which drugs actually matched
+                # We store the real matched medication strings so the frontend
+                # can show the doctor exactly what triggered the alert.
                 matched_a = [m for m in all_meds if drug_a in m]
                 matched_b = [m for m in all_meds if drug_b in m]
 
@@ -278,7 +287,8 @@ class MedicationSafetyAgent:
     ) -> list[dict]:
         alerts: list[dict] = []
 
-        # Direct allergy match -- is the patient allergic to something prescribed?
+        # Direct match means the allergy text and the medication name point to
+        # basically the same thing, so this is treated as the most serious case.
         for allergy in allergies:
             for med in all_meds:
                 if allergy in med or med in allergy:
@@ -293,7 +303,8 @@ class MedicationSafetyAgent:
                         "severity": "critical",
                     })
 
-        # Cross-reactivity
+        # Cross-reactivity is the softer version: not the exact same substance,
+        # but still close enough that we should warn the doctor.
         for allergy in allergies:
             cross_list = _ALLERGY_CROSS_REFERENCE.get(allergy, [])
             for cross_drug, explanation in cross_list:
