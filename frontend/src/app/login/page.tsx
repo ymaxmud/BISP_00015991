@@ -60,7 +60,8 @@ export default function LoginPage() {
         },
       });
       if (error) throw error;
-      // User is redirected to Google — control does not return here.
+      // If this succeeds, the browser leaves this page and goes to Google.
+      // So there is no "success" branch to handle here locally.
     } catch (err: any) {
       setError(err.message || "Could not start Google sign-in.");
       setGoogleLoading(false);
