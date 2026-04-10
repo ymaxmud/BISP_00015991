@@ -47,6 +47,8 @@ function analyzeSymptoms(
   symptoms: string,
   severity: string
 ): AnalysisResult {
+  // This is a simple rule-based matcher for the public symptom checker.
+  // It is meant to suggest a likely specialty, not act like a diagnosis tool.
   const lower = symptoms.toLowerCase();
 
   if (lower.includes("chest") || lower.includes("heart")) {
@@ -179,6 +181,8 @@ export default function FindDoctorPage() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
   function handleNext() {
+    // The screen is intentionally a short 3-step flow so the user does not get
+    // overwhelmed before seeing a recommendation.
     if (step === 1) {
       setStep(2);
     } else if (step === 2) {
@@ -211,7 +215,7 @@ export default function FindDoctorPage() {
       <Navbar />
 
       <main className="flex-1">
-        {/* Hero */}
+        {/* Intro section so the user understands the tool before starting. */}
         <section className="bg-gradient-to-br from-teal-50 to-cyan-50 border-b border-gray-100">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
             <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 text-primary mb-4">
@@ -227,7 +231,7 @@ export default function FindDoctorPage() {
           </div>
         </section>
 
-        {/* Progress bar */}
+        {/* Small progress UI so the multi-step flow feels predictable. */}
         <section className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
           <div className="flex items-center justify-between mb-2">
             {stepLabels.map((label, i) => {
@@ -271,9 +275,10 @@ export default function FindDoctorPage() {
           </div>
         </section>
 
-        {/* Step Content */}
+        {/* Only one step is rendered at a time, but the blocks below make the
+            overall flow easier to follow when reading the code. */}
         <section className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Step 1: Symptoms */}
+          {/* Step 1 is the free-text symptom entry. */}
           {step === 1 && (
             <Card className="animate-fade-in">
               <CardHeader>
@@ -316,7 +321,7 @@ export default function FindDoctorPage() {
             </Card>
           )}
 
-          {/* Step 2: Patient Info */}
+          {/* Step 2 collects basic context that can influence urgency. */}
           {step === 2 && (
             <Card className="animate-fade-in">
               <CardHeader>
@@ -368,10 +373,10 @@ export default function FindDoctorPage() {
             </Card>
           )}
 
-          {/* Step 3: Results */}
+          {/* Step 3 shows the specialty suggestion plus any warnings. */}
           {step === 3 && result && (
             <div className="space-y-6 animate-fade-in">
-              {/* Specialty Card */}
+              {/* This is the main answer card. */}
               <Card className="border-primary/20 overflow-hidden">
                 <div className="h-2 bg-primary" />
                 <CardHeader>
@@ -405,7 +410,7 @@ export default function FindDoctorPage() {
                 </CardContent>
               </Card>
 
-              {/* Red Flags */}
+              {/* Red flags are kept in their own card so they stand out visually. */}
               {result.redFlags.length > 0 && (
                 <Card className="border-red-200 bg-red-50/50">
                   <CardHeader>
@@ -433,7 +438,7 @@ export default function FindDoctorPage() {
                 </Card>
               )}
 
-              {/* Recommendations */}
+              {/* These are simple next-step suggestions for the user before the visit. */}
               <Card>
                 <CardHeader>
                   <CardTitle>Before Your Visit</CardTitle>
@@ -456,7 +461,7 @@ export default function FindDoctorPage() {
                 </CardContent>
               </Card>
 
-              {/* Disclaimer */}
+              {/* Keep the safety disclaimer visible because this tool is guidance only. */}
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
                 <p className="text-xs text-amber-800 leading-relaxed">
                   <strong>Disclaimer:</strong> This symptom checker provides
@@ -468,7 +473,7 @@ export default function FindDoctorPage() {
                 </p>
               </div>
 
-              {/* Actions */}
+              {/* Final actions after the recommendation is shown. */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link href="/doctors" className="flex-1">
                   <Button size="lg" className="w-full">
