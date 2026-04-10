@@ -14,9 +14,11 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 class OptionalJWTAuthentication(JWTAuthentication):
     """
-    Like JWTAuthentication but silently ignores invalid / expired tokens
-    instead of raising 401. This lets public endpoints work even when the
-    browser sends a stale token from a previous session.
+    This works like normal JWT auth, but it is more forgiving.
+
+    The public doctors pages should still load even if the browser happens to
+    send an expired token from an old session. Instead of hard-failing with
+    401, we ignore the bad token and continue as a public request.
     """
 
     def authenticate(self, request):
@@ -46,7 +48,8 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        # Public/unauth requests only see published, active doctors
+        # If the request is public, only return doctors that are meant to be
+        # visible on the public listing.
         if not self.request.user.is_authenticated:
             qs = qs.filter(is_public=True, is_active=True)
         specialty = self.request.query_params.get('specialty')
@@ -58,11 +61,10 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         return qs.distinct()
 
 
-# ---------------------------------------------------------------------------
-# Admin-managed doctor creation
-# ---------------------------------------------------------------------------
+# Everything below is for the clinic-admin flow where an organization creates
+# a doctor account on behalf of a doctor.
 def _clinic_admin_org(user) -> Organization | None:
-    """Returns the organization this user admins, if any."""
+    """Find the organization this admin belongs to, if there is one."""
     if not user.is_authenticated:
         return None
     staff = user.staff_roles.select_related('organization').first()
@@ -112,8 +114,11 @@ class AdminAddDoctorSerializer(serializers.Serializer):
 
 class AdminAddDoctorView(generics.CreateAPIView):
     """
-    Lets a clinic admin add a doctor to their organization. Enforces the
-    org's subscription seat limit.
+    This endpoint lets a clinic admin create a doctor inside their own
+    organization.
+
+    The important extra rule here is the seat limit check. If the clinic's
+    subscription does not allow another doctor, we stop the flow early.
     """
 
     serializer_class = AdminAddDoctorSerializer
@@ -128,7 +133,8 @@ class AdminAddDoctorView(generics.CreateAPIView):
         if organization is None:
             return Response({'detail': 'No organization linked to this admin.'}, status=400)
 
-        # Enforce seat limit
+        # Before we create anything, make sure the clinic is actually allowed
+        # to add one more doctor on its current plan.
         subscription = getattr(organization, 'subscription', None)
         if subscription and not subscription.can_add_doctor():
             return Response(
@@ -146,7 +152,8 @@ class AdminAddDoctorView(generics.CreateAPIView):
         data = serializer.validated_data
 
         with transaction.atomic():
-            # Create a user account for the new doctor with a temporary password
+            # We create both the auth user and the doctor profile in one
+            # transaction so we do not end up with half-finished accounts.
             email = data['email']
             if User.objects.filter(email__iexact=email).exists():
                 return Response({'email': ['A user with this email already exists.']}, status=400)
@@ -194,7 +201,8 @@ class AdminAddDoctorView(generics.CreateAPIView):
                         doctor_profile=profile, specialty=spec
                     )
 
-            # Staff role links the doctor to the clinic org for permissions
+            # This staff-role row is what actually ties the doctor to the
+            # clinic for permission checks elsewhere in the app.
             StaffRole.objects.get_or_create(
                 organization=organization,
                 user=doctor_user,
