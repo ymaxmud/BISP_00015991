@@ -67,6 +67,8 @@ export default function OrgUsersPage() {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
 
   const loadUsers = useCallback(async () => {
+    // Build the request from the current UI filters, then let the backend
+    // return the already-filtered list.
     setLoading(true);
     setError(null);
     try {
@@ -94,6 +96,8 @@ export default function OrgUsersPage() {
   }, [loadUsers]);
 
   const counts = useMemo(() => {
+    // These counters are based on whatever is currently loaded into the page,
+    // so the summary cards and table always stay in sync.
     const base: Record<RoleFilter, number> = {
       all: users.length,
       patient: 0,
@@ -110,7 +114,7 @@ export default function OrgUsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header plus a manual refresh in case admins want the latest data immediately. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Users</h1>
@@ -124,7 +128,7 @@ export default function OrgUsersPage() {
         </Button>
       </div>
 
-      {/* Summary cards */}
+      {/* Quick breakdown cards that also double as role filters. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {(["all", "patient", "doctor", "admin"] as RoleFilter[]).map((r) => {
           const active = roleFilter === r;
@@ -156,7 +160,7 @@ export default function OrgUsersPage() {
         })}
       </div>
 
-      {/* Search + role filter */}
+      {/* Search and role filters control the backend query. */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative max-w-sm flex-1">
           <Search
@@ -189,7 +193,7 @@ export default function OrgUsersPage() {
         </div>
       </div>
 
-      {/* Error */}
+      {/* Keep the error lightweight so the page still feels usable when a fetch fails. */}
       {error && (
         <Card className="border-red-100 bg-red-50">
           <CardContent className="text-sm text-red-700">
@@ -198,7 +202,7 @@ export default function OrgUsersPage() {
         </Card>
       )}
 
-      {/* Table */}
+      {/* Main user list. */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
