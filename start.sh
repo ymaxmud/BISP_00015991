@@ -1,12 +1,15 @@
 #!/bin/bash
 
-#helps to start all services with one command, and also ensures that any existing processes on the required ports are killed first. cd ~/Desktop/AvicennaAssistant./start.sh
+# This script is here so you can boot the whole project with one command.
+# It also clears the ports we use first, so an old crashed process does not
+# block the new run and make it look like the project is broken.
 
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PYTHON="$PROJECT_DIR/.venv/bin/python3"
 
-# kill anything already on these ports
+# Before starting again, clear the ports used by frontend, backend, and AI.
+# That saves you from hunting zombie processes by hand.
 lsof -ti:3000,8000,8001 2>/dev/null | xargs kill -9 2>/dev/null || true
 
 echo "Starting backend..."
