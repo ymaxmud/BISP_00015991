@@ -41,7 +41,8 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
       <Navbar />
 
-      {/* Hero */}
+      {/* First impression section: headline, short value proposition, and the
+          two actions a new visitor is most likely to care about. */}
       <section className="gradient-hero text-white py-24 md:py-32 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl" />
@@ -73,7 +74,8 @@ export default function Home() {
               </Link>
             </div>
           </div>
-          {/* Floating stats */}
+          {/* Quick proof points so the hero feels grounded in outcomes, not
+              just marketing words. */}
           <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 animate-slide-up">
             {[
               { value: "40%", label: "Faster Consultations", icon: <Clock size={20} /> },
@@ -92,7 +94,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How It Works */}
+      {/* Short step-by-step explanation for first-time visitors. */}
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
@@ -114,7 +116,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features */}
+      {/* Core product pillars. Each card answers a different "what does this do?" question. */}
       <section className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
@@ -137,7 +139,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* For Providers */}
+      {/* This section is aimed at clinics and hospitals evaluating the product. */}
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
@@ -176,7 +178,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Social proof before the final signup push. */}
       <section className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
@@ -201,7 +203,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* Final call-to-action after the visitor has seen the full landing page story. */}
       <section className="gradient-hero text-white py-20">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Transform Your Clinic?</h2>
