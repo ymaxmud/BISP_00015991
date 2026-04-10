@@ -69,7 +69,8 @@ export default function DoctorAIPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const currentStep = STEPS[stepIndex].key;
 
-  // ---- form state ----
+  // These state blocks match the four-step flow on the page:
+  // patient info -> medication check -> report analysis -> overall summary.
   const [patientForm, setPatientForm] = useState<PatientForm>({
     patient_name: "",
     age: "",
@@ -95,12 +96,14 @@ export default function DoctorAIPage() {
     extracted_text: string;
   } | null>(null);
 
-  // ---- per-step results ----
+  // Each step stores its own result so the doctor can move back and forth
+  // without losing what was already generated.
   const [caseResult, setCaseResult] = useState<any>(null);
   const [medResult, setMedResult] = useState<any>(null);
   const [reportResult, setReportResult] = useState<any>(null);
 
-  // ---- per-step status ----
+  // Loading and error states stay separate per step so one failure does not
+  // make the whole page feel broken.
   const [caseLoading, setCaseLoading] = useState(false);
   const [medLoading, setMedLoading] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
@@ -110,7 +113,8 @@ export default function DoctorAIPage() {
   const [medError, setMedError] = useState("");
   const [reportError, setReportError] = useState("");
 
-  // ---- step navigation ----
+  // The page behaves like a wizard, but we still let the doctor move back
+  // and review previous steps.
   const goNext = () => setStepIndex((i) => Math.min(STEPS.length - 1, i + 1));
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
   const goTo = (i: number) => setStepIndex(i);
@@ -140,7 +144,8 @@ export default function DoctorAIPage() {
     setReportError("");
   };
 
-  // ---- step 1: case analysis ----
+  // Step 1 runs the big case-analysis endpoint. It also uses that result to
+  // prefill the next medication step where possible.
   const runCaseAndContinue = async () => {
     setCaseError("");
     setCaseLoading(true);
@@ -158,7 +163,7 @@ export default function DoctorAIPage() {
       });
       setCaseResult(data);
 
-      // Pre-fill medication safety form from patient info
+      // This saves the doctor from typing the same med/allergy info twice.
       setMedForm((prev) => ({
         current: prev.current || patientForm.medications,
         proposed: prev.proposed,
@@ -173,7 +178,8 @@ export default function DoctorAIPage() {
     }
   };
 
-  // ---- step 2: medication safety ----
+  // Step 2 isolates medication/allergy checking so it can be used on its own
+  // even when the doctor only wants a quick safety answer.
   const runMedAndContinue = async () => {
     setMedError("");
     setMedLoading(true);
@@ -201,7 +207,8 @@ export default function DoctorAIPage() {
     }
   };
 
-  // ---- step 3: report analysis (text or upload) ----
+  // Step 3 supports either pasted report text or a real uploaded file.
+  // If a file is uploaded, the backend extracts the text first for us.
   const handleFilePick = (file: File | null) => {
     setReportFile(file);
     setReportUploadInfo(null);
@@ -243,14 +250,16 @@ export default function DoctorAIPage() {
     }
   };
 
-  // ---- skip report (still allow doctor to view overall) ----
+  // Report analysis is optional, so skipping it should still let the doctor
+  // reach the combined summary page.
   const skipReportAndContinue = () => {
     setReportError("");
     setReportResult(null);
     goNext();
   };
 
-  // ---- re-run all (overall page) ----
+  // From the final screen the doctor can refresh the AI outputs without
+  // manually stepping through the whole wizard again.
   const rerunAll = async () => {
     setOverallLoading(true);
     try {
@@ -270,7 +279,7 @@ export default function DoctorAIPage() {
             });
             setCaseResult(data);
           } catch {
-            /* keep prior result */
+            /* If re-run fails, keep the previous successful result instead of blanking the screen. */
           }
         })(),
         (async () => {
@@ -291,7 +300,7 @@ export default function DoctorAIPage() {
             });
             setMedResult(data);
           } catch {
-            /* keep prior result */
+            /* Same idea here: better to keep older data than show nothing. */
           }
         })(),
       ]);
@@ -300,7 +309,7 @@ export default function DoctorAIPage() {
     }
   };
 
-  // ---- can-advance flags ----
+  // These flags control when each step has enough data to be worth running.
   const canRunCase = patientForm.symptoms.trim().length > 0;
   const canRunMed = medForm.proposed.trim().length > 0;
   const canRunReport = !!reportFile || reportText.trim().length > 0;
@@ -326,10 +335,10 @@ export default function DoctorAIPage() {
         </button>
       </div>
 
-      {/* Stepper */}
+      {/* The stepper shows progress and also lets the doctor revisit finished steps. */}
       <Stepper stepIndex={stepIndex} goTo={goTo} />
 
-      {/* Step body */}
+      {/* Only one step body is visible at a time, but each one keeps its own state. */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 mt-6">
         {currentStep === "patient" && (
           <PatientStep
@@ -384,9 +393,8 @@ export default function DoctorAIPage() {
   );
 }
 
-// ===========================================================================
-// Stepper
-// ===========================================================================
+// The stepper is separated out so the main page component does not become
+// impossible to read.
 function Stepper({
   stepIndex,
   goTo,
@@ -447,9 +455,7 @@ function Stepper({
   );
 }
 
-// ===========================================================================
-// Step 1 — Patient Information
-// ===========================================================================
+// Step 1 is where we collect the context the AI needs to reason about the case.
 function PatientStep({
   form,
   setForm,
