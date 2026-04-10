@@ -1,6 +1,12 @@
 """
-Medical rules engine for symptom-to-specialty routing and red flag detection.
-All logic is rule-based -- no external LLM calls.
+This is the fully rule-based part of the AI service.
+
+We use it for two jobs:
+1. guess which specialty best matches the symptoms
+2. catch obvious red-flag phrases that should raise urgency
+
+There is no LLM call here. That is intentional, because these checks should
+still work even when no external AI service is available.
 """
 
 SYMPTOM_SPECIALTY_MAP: dict[str, list[str]] = {
@@ -125,13 +131,15 @@ def get_specialty_from_symptoms(symptoms: str) -> str:
     """
     symptoms_lower = symptoms.lower()
 
-    # Score each specialty by the number of keyword hits
+    # We do not try to be overly clever here. We simply count keyword hits for
+    # each specialty and use that as the routing score.
     scores: dict[str, int] = {}
     for specialty, keywords in SYMPTOM_SPECIALTY_MAP.items():
         score = 0
         for keyword in keywords:
             if keyword in symptoms_lower:
-                # Longer keyword matches are worth more to reduce false positives
+                # Longer phrases usually mean a more specific match, so we give
+                # them a bit more weight instead of treating every hit equally.
                 score += len(keyword)
         if score > 0:
             scores[specialty] = score
@@ -139,7 +147,8 @@ def get_specialty_from_symptoms(symptoms: str) -> str:
     if not scores:
         return "General Practice"
 
-    # Return the specialty with the highest weighted score
+    # Pick the specialty with the strongest score. If two are close, Python's
+    # normal max behavior will decide based on the final numeric total.
     return max(scores, key=scores.get)
 
 
