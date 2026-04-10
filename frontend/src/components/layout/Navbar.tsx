@@ -19,7 +19,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
+          {/* Brand link so users can always get back to the homepage. */}
           <Link href="/" className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-white">
               <Stethoscope size={20} />
@@ -29,7 +29,7 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Desktop nav */}
+          {/* Main site navigation for desktop/tablet widths. */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
               <Link
@@ -42,7 +42,7 @@ export default function Navbar() {
             ))}
           </nav>
 
-          {/* Desktop actions */}
+          {/* Primary account actions shown on larger screens. */}
           <div className="hidden md:flex items-center gap-3">
             <Link href="/login">
               <Button variant="ghost" size="sm">
@@ -54,7 +54,7 @@ export default function Navbar() {
             </Link>
           </div>
 
-          {/* Mobile toggle */}
+          {/* On mobile we collapse the nav into one menu button to save space. */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             className="md:hidden p-2 text-muted hover:text-foreground rounded-lg hover:bg-gray-50 transition-colors"
@@ -65,7 +65,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile version of the links and auth buttons. */}
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white animate-fade-in">
           <div className="px-4 py-4 space-y-1">
