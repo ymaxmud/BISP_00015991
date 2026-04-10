@@ -77,7 +77,7 @@ export default function OrgDashboardPage() {
         </p>
       </div>
 
-      {/* Stat Cards */}
+      {/* Top-line clinic health metrics for a quick daily overview. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Appointments Today"
@@ -109,7 +109,7 @@ export default function OrgDashboardPage() {
         />
       </div>
 
-      {/* Charts */}
+      {/* Charts add a little trend detail beyond the headline numbers. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -167,7 +167,7 @@ export default function OrgDashboardPage() {
         </Card>
       </div>
 
-      {/* Flagged Patients */}
+      {/* This section pulls urgent follow-up cases into one obvious place. */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
