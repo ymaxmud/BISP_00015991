@@ -1,15 +1,4 @@
-"""
-Medical report analysis endpoints.
-
-Supports raw text (`/report-analysis`), file upload (`/report-upload`), and
-follow-up Q&A (`/report-chat`).
-
-The important idea here is that report analysis has two layers:
-1. a rule-based parser that extracts known lab values
-2. an optional LLM-assisted chat layer for follow-up questions
-
-That means the base feature still works even if the LLM is unavailable.
-"""
+"""Medical report analysis endpoints."""
 from __future__ import annotations
 
 import re
@@ -57,7 +46,6 @@ class _Analyte:
         self.high_hint = high_hint
 
 
-# The regex rules below are intentionally practical, not perfect.
 # They try to catch the common ways a value appears in exported lab reports.
 _ANALYTES: list[_Analyte] = [
     _Analyte(
