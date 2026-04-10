@@ -4,9 +4,11 @@ Medical report analysis endpoints.
 Supports raw text (`/report-analysis`), file upload (`/report-upload`), and
 follow-up Q&A (`/report-chat`).
 
-The lab-extraction logic is rule-based: each known analyte has one or more
-regex patterns plus a reference range. When a match is found we emit a
-structured row with status (low/normal/high) and a clinical hint.
+The important idea here is that report analysis has two layers:
+1. a rule-based parser that extracts known lab values
+2. an optional LLM-assisted chat layer for follow-up questions
+
+That means the base feature still works even if the LLM is unavailable.
 """
 from __future__ import annotations
 
@@ -28,9 +30,11 @@ from app.services.llm import chat as llm_chat
 router = APIRouter()
 
 
-# ---------------------------------------------------------------------------
-# Knowledge base
-# ---------------------------------------------------------------------------
+# `_Analyte` is just a neat way to keep the parsing rules readable.
+# Each instance says:
+# - what we are looking for
+# - how to recognize it in text
+# - what normal range to compare it against
 class _Analyte:
     def __init__(
         self,
@@ -53,9 +57,8 @@ class _Analyte:
         self.high_hint = high_hint
 
 
-# Pattern notes:
-#   - `[:\s]+` after the name matches an optional colon/whitespace sequence.
-#   - The capture group is the number; we parse floats with optional decimal.
+# The regex rules below are intentionally practical, not perfect.
+# They try to catch the common ways a value appears in exported lab reports.
 _ANALYTES: list[_Analyte] = [
     _Analyte(
         "hemoglobin", "Hemoglobin",
@@ -194,6 +197,9 @@ _ANALYTES: list[_Analyte] = [
 
 
 def _analyze_text(report_text: str, patient_context: Optional[str] = None) -> ReportAnalysisResponse:
+    # This is the core parser. It scans the report, extracts whatever known
+    # analytes it can find, then builds both a machine-friendly structure and
+    # a short summary the frontend can show immediately.
     text = report_text or ""
     key_findings: list[str] = []
     abnormal_values: list[dict] = []
@@ -218,7 +224,6 @@ def _analyze_text(report_text: str, patient_context: Optional[str] = None) -> Re
 
         ref_range = f"{analyte.low}-{analyte.high} {analyte.unit}"
         if value < analyte.low:
-            status = "low"
             key_findings.append(
                 f"{analyte.name} is LOW: {value} {analyte.unit} (ref: {ref_range})"
             )
@@ -233,7 +238,6 @@ def _analyze_text(report_text: str, patient_context: Optional[str] = None) -> Re
             if analyte.low_hint:
                 recommendations.append(f"{analyte.name} low → {analyte.low_hint}")
         elif value > analyte.high:
-            status = "high"
             key_findings.append(
                 f"{analyte.name} is HIGH: {value} {analyte.unit} (ref: {ref_range})"
             )
@@ -293,6 +297,8 @@ async def report_upload(
     file: UploadFile = File(...),
     patient_context: Optional[str] = Form(None),
 ) -> ReportUploadResponse:
+    # File uploads go through text extraction first. Once we have text, we run
+    # exactly the same analysis logic as the raw-text endpoint.
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
@@ -325,8 +331,9 @@ def report_chat(req: ReportChatRequest) -> ReportChatResponse:
 
     analysis = _analyze_text(report)
 
-    # Try the LLM first — it handles natural language far better than keyword
-    # matching. We ground it on the structured analysis so it can't invent labs.
+    # For chat, we first try the LLM because natural follow-up questions are
+    # hard to answer with plain keyword rules. We still ground it with the
+    # structured findings so it stays tied to the actual report.
     abnormal_lines = "\n".join(
         f"- {av['parameter']}: {av['value']} {av['unit']} ({av['status']}, ref {av['reference_range']})"
         for av in analysis.abnormal_values
@@ -358,12 +365,16 @@ def report_chat(req: ReportChatRequest) -> ReportChatResponse:
         if any(w in line_str.lower() for w in q_words):
             relevant_sections.append(line_str)
 
+    # If the LLM gives us something usable, prefer that answer and keep the
+    # simpler fallback rules only as a backup path.
     if llm_answer:
         return ReportChatResponse(
             answer=llm_answer,
             relevant_sections=relevant_sections[:10],
         )
 
+    # Everything below is the non-LLM fallback. It is more limited, but it
+    # means the endpoint still answers basic questions even without OpenAI.
     if "abnormal" in question or "problem" in question or "issue" in question or "wrong" in question:
         if analysis.abnormal_values:
             detail = "; ".join(
