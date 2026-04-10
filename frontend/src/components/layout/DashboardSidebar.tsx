@@ -51,7 +51,8 @@ export default function DashboardSidebar({ role }: { role: "patient" | "doctor" 
 
   return (
     <>
-      {/* Mobile toggle */}
+      {/* On small screens the whole sidebar is hidden by default, so this
+          button is how the user opens and closes the navigation drawer. */}
       <button
         onClick={() => setOpen(!open)}
         className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-md border border-gray-200"
@@ -59,14 +60,14 @@ export default function DashboardSidebar({ role }: { role: "patient" | "doctor" 
         {open ? <X size={20} /> : <Menu size={20} />}
       </button>
 
-      {/* Sidebar */}
+      {/* Main sidebar shell. Desktop keeps it visible, mobile slides it in. */}
       <aside
         className={`fixed md:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ${
           open ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
+          {/* Brand area plus a quick hint about which portal the person is in. */}
           <div className="p-6 border-b border-gray-100">
             <Link href="/" className="flex items-center gap-2">
               <Activity className="text-primary" size={24} />
@@ -75,7 +76,8 @@ export default function DashboardSidebar({ role }: { role: "patient" | "doctor" 
             <p className="text-xs text-muted mt-1">{roleLabel} Portal</p>
           </div>
 
-          {/* Nav */}
+          {/* Role-based navigation links. These are the links the user will
+              click most often while moving around the dashboard. */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             {items.map((item) => {
               const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -97,7 +99,7 @@ export default function DashboardSidebar({ role }: { role: "patient" | "doctor" 
             })}
           </nav>
 
-          {/* Bottom */}
+          {/* Small footer action to leave the dashboard and go back home. */}
           <div className="p-4 border-t border-gray-100">
             <Link
               href="/"
@@ -109,7 +111,8 @@ export default function DashboardSidebar({ role }: { role: "patient" | "doctor" 
         </div>
       </aside>
 
-      {/* Mobile overlay */}
+      {/* Tapping the dark overlay closes the sidebar on mobile, which makes
+          the drawer feel more natural to use. */}
       {open && (
         <div
           className="fixed inset-0 bg-black/20 z-30 md:hidden"
