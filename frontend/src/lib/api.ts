@@ -22,7 +22,8 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
-// Auth
+// Everything below is grouped by feature area so pages can import one small
+// API helper instead of rebuilding fetch calls each time.
 export const auth = {
   register: (data: {
     email: string;
@@ -82,7 +83,7 @@ export const auth = {
     ),
 };
 
-// Billing
+// Subscription and billing-related requests.
 export const billing = {
   listPlans: () =>
     request<any>(`${API_BASE}/billing/plans/`),
@@ -90,7 +91,7 @@ export const billing = {
     request<any>(`${API_BASE}/billing/me/`),
 };
 
-// Doctors
+// Doctor directory plus admin-only doctor creation.
 export const doctors = {
   list: (params?: string) =>
     request<any>(`${API_BASE}/doctors/${params ? `?${params}` : ""}`),
@@ -120,7 +121,7 @@ export const doctors = {
   },
 };
 
-// Organizations
+// Clinics, hospitals, and related organization data.
 export const organizations = {
   list: (params?: string) =>
     request<any[]>(
@@ -130,13 +131,13 @@ export const organizations = {
     request<any>(`${API_BASE}/organizations/${slug}/`),
 };
 
-// Specialties
+// Specialties are split out because many screens need them for dropdowns.
 export const specialties = {
   list: () =>
     request<any[]>(`${API_BASE}/organizations/specialties/`),
 };
 
-// Appointments
+// Appointment booking and status updates.
 export const appointments = {
   list: () => request<any[]>(`${API_BASE}/appointments/`),
   create: (data: any) =>
@@ -151,7 +152,7 @@ export const appointments = {
     }),
 };
 
-// Intake
+// Intake form endpoints used before or around appointments.
 export const intake = {
   submit: (appointmentId: number, data: any) =>
     request<any>(`${API_BASE}/queue/intake-forms/`, {
@@ -164,7 +165,7 @@ export const intake = {
     ),
 };
 
-// Queue
+// Queue board endpoints for clinic workflow.
 export const queue = {
   list: () => request<any[]>(`${API_BASE}/queue/tickets/`),
   update: (id: number, data: any) =>
@@ -174,7 +175,7 @@ export const queue = {
     }),
 };
 
-// Encounters
+// Consultation encounter records.
 export const encounters = {
   create: (data: any) =>
     request<any>(`${API_BASE}/encounters/`, {
@@ -184,7 +185,7 @@ export const encounters = {
   get: (id: number) => request<any>(`${API_BASE}/encounters/${id}/`),
 };
 
-// Prescriptions
+// Prescription creation and listing.
 export const prescriptions = {
   list: () => request<any[]>(`${API_BASE}/prescriptions/`),
   create: (data: any) =>
@@ -194,7 +195,7 @@ export const prescriptions = {
     }),
 };
 
-// Reminders
+// Reminder management.
 export const reminders = {
   list: () => request<any[]>(`${API_BASE}/reminders/`),
   create: (data: any) =>
@@ -204,7 +205,7 @@ export const reminders = {
     }),
 };
 
-// Reviews
+// Patient review endpoints.
 export const reviews = {
   list: (params?: string) =>
     request<any[]>(`${API_BASE}/reviews/${params ? `?${params}` : ""}`),
@@ -215,7 +216,7 @@ export const reviews = {
     }),
 };
 
-// Uploads
+// File uploads go through the backend because auth and storage rules live there.
 export const uploads = {
   list: () => request<any[]>(`${API_BASE}/uploads/`),
   upload: async (file: File, appointmentId?: number) => {
@@ -232,7 +233,7 @@ export const uploads = {
   },
 };
 
-// Analytics
+// Dashboard and reporting numbers.
 export const analytics = {
   dashboard: () => request<any>(`${API_BASE}/analytics/dashboard/`),
   trends: () => request<any>(`${API_BASE}/analytics/trends/`),
@@ -240,7 +241,8 @@ export const analytics = {
   queueStats: () => request<any>(`${API_BASE}/analytics/queue/`),
 };
 
-// AI Service
+// AI-specific routes are kept in one place so the pages do not need to know
+// the exact endpoint names.
 export const ai = {
   symptomRouting: (data: {
     symptoms: string;
