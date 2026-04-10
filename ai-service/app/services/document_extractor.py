@@ -1,5 +1,8 @@
 """
-Document text extraction helpers supporting PDF (PyPDF2) and Word (python-docx).
+This file is responsible for turning uploaded documents into plain text.
+
+Right now we support PDF and Word files. The rest of the app should not need
+to care which parser was used internally; it just asks for extracted text.
 """
 from __future__ import annotations
 
@@ -43,8 +46,11 @@ def extract_document_text(
     content_type: Optional[str] = None,
 ) -> str:
     """
-    Extract text from a PDF or DOCX document. Dispatches on MIME type first,
-    then falls back to the filename extension.
+    Try to extract text from the uploaded file.
+
+    We first look at MIME type because that is usually the most reliable clue.
+    If that is missing or unhelpful, we fall back to the filename extension.
+    As a last resort, we try both parsers and accept the first one that works.
     """
     name = (filename or "").lower()
     ctype = (content_type or "").lower()
@@ -59,7 +65,8 @@ def extract_document_text(
     ):
         return _extract_docx(file_bytes)
 
-    # Fallback: attempt PDF then DOCX
+    # Sometimes uploads come in with a bad content type or no useful file
+    # extension. In that case we still try both parsers before giving up.
     try:
         return _extract_pdf(file_bytes)
     except Exception:
