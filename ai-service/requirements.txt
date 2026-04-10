@@ -5,3 +5,4 @@ python-multipart
 PyPDF2
 python-docx
 pytest
+openai>=1.40
