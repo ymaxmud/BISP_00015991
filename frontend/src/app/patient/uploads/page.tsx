@@ -16,9 +16,7 @@ import {
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// This is the small UI-facing file shape used by the cards and dialogs on this page.
 
 interface UploadedFile {
   id: number;
@@ -29,9 +27,7 @@ interface UploadedFile {
   size: string;
 }
 
-// ---------------------------------------------------------------------------
-// Seed data
-// ---------------------------------------------------------------------------
+// Seed data keeps the uploads screen usable as a demo before full API wiring is finished.
 
 const initialFiles: UploadedFile[] = [
   { id: 1, name: "Blood_Test_Results_Mar2026.pdf", type: "PDF", date: "2026-03-25", size: "1.2 MB", status: "valid" },
@@ -59,9 +55,8 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+// The main flow here is simple on purpose: add files, see them in a list,
+// inspect one, or remove one.
 
 export default function UploadsPage() {
   const [files, setFiles] = useState<UploadedFile[]>(initialFiles);
@@ -86,7 +81,8 @@ export default function UploadsPage() {
     setFiles((prev) => [...newFiles, ...prev]);
     setUploadFeedback(`${newFiles.length} file${newFiles.length > 1 ? "s" : ""} uploaded successfully!`);
 
-    // Simulate processing -> pending after 2s
+    // This fake delay is only for demo feel, so the UI shows a believable
+    // "processing" moment before moving the file into pending review.
     setTimeout(() => {
       setFiles((prev) =>
         prev.map((f) =>
@@ -140,13 +136,13 @@ export default function UploadsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Page title and purpose. */}
       <div className="pl-12 md:pl-0">
         <h1 className="text-2xl font-bold text-foreground">Medical Reports</h1>
         <p className="text-muted mt-1">Upload and manage your medical documents</p>
       </div>
 
-      {/* Stats */}
+      {/* Quick counters so the user can scan their report library at a glance. */}
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 text-center">
           <p className="text-2xl font-bold text-foreground">{files.length}</p>
@@ -162,7 +158,7 @@ export default function UploadsPage() {
         </div>
       </div>
 
-      {/* Upload feedback */}
+      {/* Small success message after a new upload action. */}
       {uploadFeedback && (
         <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">
           <CheckCircle2 size={16} />
@@ -170,7 +166,7 @@ export default function UploadsPage() {
         </div>
       )}
 
-      {/* Drop zone */}
+      {/* Main upload target. The user can either drag files here or click to open the picker. */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -205,7 +201,7 @@ export default function UploadsPage() {
         </p>
       </div>
 
-      {/* File list */}
+      {/* Existing files plus quick view/delete actions. */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-foreground">
@@ -264,9 +260,7 @@ export default function UploadsPage() {
         )}
       </div>
 
-      {/* ================================================================= */}
-      {/* DELETE CONFIRMATION                                                */}
-      {/* ================================================================= */}
+      {/* Confirmation step so deleting a medical file is not too easy to do by accident. */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteId(null)} />
@@ -293,9 +287,7 @@ export default function UploadsPage() {
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* VIEW FILE DETAIL                                                   */}
-      {/* ================================================================= */}
+      {/* Lightweight details view for one file without leaving the main list. */}
       {viewFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewFile(null)} />
