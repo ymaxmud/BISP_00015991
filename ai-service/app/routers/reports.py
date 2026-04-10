@@ -23,6 +23,7 @@ from app.schemas.reports import (
     ReportUploadResponse,
 )
 from app.services.document_extractor import extract_document_text
+from app.services.llm import chat as llm_chat
 
 router = APIRouter()
 
@@ -324,6 +325,30 @@ def report_chat(req: ReportChatRequest) -> ReportChatResponse:
 
     analysis = _analyze_text(report)
 
+    # Try the LLM first — it handles natural language far better than keyword
+    # matching. We ground it on the structured analysis so it can't invent labs.
+    abnormal_lines = "\n".join(
+        f"- {av['parameter']}: {av['value']} {av['unit']} ({av['status']}, ref {av['reference_range']})"
+        for av in analysis.abnormal_values
+    ) or "(none flagged)"
+    system_prompt = (
+        "You are a clinical assistant helping a doctor interpret a lab report. "
+        "Answer the doctor's question using ONLY the report text and the structured "
+        "findings provided. Be concise (3-6 sentences). If the answer is not in "
+        "the report, say so. Do not invent lab values."
+    )
+    user_prompt = (
+        f"REPORT:\n{report[:6000]}\n\n"
+        f"STRUCTURED FINDINGS:\nSummary: {analysis.summary}\n"
+        f"Abnormal values:\n{abnormal_lines}\n\n"
+        f"QUESTION: {req.question}"
+    )
+    llm_answer = llm_chat(
+        system=system_prompt,
+        user=user_prompt,
+        history=req.chat_history if hasattr(req, "chat_history") else None,
+    )
+
     relevant_sections: list[str] = []
     q_words = [w for w in question.split() if len(w) > 3]
     for line in report.split("\n"):
@@ -332,6 +357,12 @@ def report_chat(req: ReportChatRequest) -> ReportChatResponse:
             continue
         if any(w in line_str.lower() for w in q_words):
             relevant_sections.append(line_str)
+
+    if llm_answer:
+        return ReportChatResponse(
+            answer=llm_answer,
+            relevant_sections=relevant_sections[:10],
+        )
 
     if "abnormal" in question or "problem" in question or "issue" in question or "wrong" in question:
         if analysis.abnormal_values:
