@@ -6,8 +6,9 @@ Each endpoint:
  2. creates the user + profile + related records inside a single transaction,
  3. returns JWT tokens so the frontend can log the user in immediately.
 
-These endpoints live in the accounts app because they span multiple apps and
-`accounts/urls.py` is already mounted at `/api/v1/auth/`.
+These endpoints live in the accounts app because registration touches a lot of
+different models at once. Keeping that logic in one place makes the workflow
+easier to follow and helps us avoid half-created accounts.
 """
 from __future__ import annotations
 
@@ -66,9 +67,8 @@ def _unique_slug(base: str, model, field: str = 'public_slug') -> str:
     return candidate
 
 
-# ---------------------------------------------------------------------------
-# Patient registration
-# ---------------------------------------------------------------------------
+# Patient registration is split into nested serializer pieces so each step of
+# the frontend wizard maps cleanly to one part of the backend payload.
 class _FamilyMemberInput(serializers.Serializer):
     first_name = serializers.CharField()
     last_name = serializers.CharField(required=False, allow_blank=True)
@@ -96,7 +96,7 @@ class _SymptomInput(serializers.Serializer):
 
 
 class PatientRegistrationSerializer(serializers.Serializer):
-    # Step 1 — Account
+    # Step 1: basic account data the person types first.
     first_name = serializers.CharField()
     last_name = serializers.CharField(required=False, allow_blank=True)
     email = serializers.EmailField()
@@ -107,26 +107,26 @@ class PatientRegistrationSerializer(serializers.Serializer):
         choices=PatientProfile.Gender.choices, required=False, allow_blank=True
     )
 
-    # Step 2 — Family
+    # Step 2: household / family details.
     family_members = _FamilyMemberInput(many=True, required=False)
 
-    # Step 3 — Vitals
+    # Step 3: body measurements.
     height_cm = serializers.IntegerField(required=False, allow_null=True, min_value=30, max_value=300)
     weight_kg = serializers.DecimalField(
         required=False, allow_null=True, max_digits=5, decimal_places=2, min_value=Decimal('1')
     )
 
-    # Step 4 — Lifestyle
+    # Step 4: day-to-day lifestyle answers.
     smoking = serializers.CharField(required=False, allow_blank=True)
     alcohol = serializers.CharField(required=False, allow_blank=True)
     physical_activity = serializers.CharField(required=False, allow_blank=True)
 
-    # Step 5 — Conditions + meds
+    # Step 5: existing conditions, allergies, and medication list.
     chronic_conditions = _ChronicConditionInput(many=True, required=False)
     allergies = serializers.CharField(required=False, allow_blank=True)
     medications = _MedicationInput(many=True, required=False)
 
-    # Step 6 — Symptom pre-triage
+    # Step 6: symptoms we can use later for intake / triage features.
     symptoms = _SymptomInput(many=True, required=False)
 
     def validate_email(self, value):
@@ -178,7 +178,9 @@ class PatientRegistrationSerializer(serializers.Serializer):
         for sym in symptoms:
             IntakeSymptom.objects.create(patient_profile=profile, **sym)
 
-        # Seed the legacy MedicalHistory row so existing features keep working.
+        # Some older parts of the product still expect one flat
+        # `MedicalHistory` row, so we keep creating it even though the newer
+        # structured models are the real source of truth now.
         MedicalHistory.objects.create(
             patient_profile=profile,
             chronic_conditions=', '.join(
@@ -206,9 +208,8 @@ class PatientRegistrationView(APIView):
         return Response(_tokens_for(user), status=status.HTTP_201_CREATED)
 
 
-# ---------------------------------------------------------------------------
-# Doctor registration (individual, not clinic-managed)
-# ---------------------------------------------------------------------------
+# This doctor flow is for a doctor registering themselves directly.
+# The separate admin-add-doctor flow is for clinics creating doctor accounts.
 class DoctorRegistrationSerializer(serializers.Serializer):
     # Step 1 — Account
     first_name = serializers.CharField()
