@@ -6,9 +6,12 @@ We model three kinds of plans:
  - `individual_doctor` — $15/month for one doctor with AI access
  - `clinic`            — $99/month for a clinic with up to N doctors
 
-`max_doctors` enforces how many doctors an organization or individual-doctor
-subscription can support. For individual doctors the owning subscription is
-attached to their user account; for clinics it is attached to the organization.
+One small but important detail: ownership works in two different ways.
+- an individual doctor subscription belongs to a user
+- a clinic subscription belongs to an organization
+
+That is why the models below support both user-linked and organization-linked
+subscriptions.
 """
 from decimal import Decimal
 
@@ -41,8 +44,8 @@ class SubscriptionPlan(models.Model):
 
 class Subscription(models.Model):
     """
-    A Subscription links either an Organization (clinic plan) or a User
-    (individual-doctor plan) to a SubscriptionPlan.
+    A subscription always belongs to exactly one owner:
+    either an organization or a user, never both at the same time.
     """
 
     class Status(models.TextChoices):
@@ -96,9 +99,11 @@ class Subscription(models.Model):
 
     def current_doctor_count(self) -> int:
         """
-        Number of doctors currently counted against this subscription.
-        For a clinic, that's every doctor whose organization matches.
-        For an individual doctor, it's the single doctor profile tied to the user.
+        Figure out how many active doctor seats this subscription is currently using.
+
+        For clinics we count active doctors inside the organization.
+        For an individual doctor plan, the answer is basically 0 or 1 depending
+        on whether that user has a doctor profile.
         """
         if self.organization_id:
             return self.organization.doctors.filter(is_active=True).count()
@@ -112,7 +117,11 @@ class Subscription(models.Model):
 
 class Payment(models.Model):
     """
-    Records a payment (mocked — we do not integrate Stripe here).
+    Stores a payment record.
+
+    This is intentionally simple for now. We are not doing a full payment
+    gateway integration here yet, so these rows act more like billing history
+    than a full financial ledger.
     """
 
     class Status(models.TextChoices):
