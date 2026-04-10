@@ -1,5 +1,8 @@
 """
-PDF text extraction utilities using PyPDF2.
+Small PDF-only helpers.
+
+This file is narrower than `document_extractor.py`: it only deals with raw
+PDF validation and text extraction.
 """
 
 import io
@@ -7,19 +10,21 @@ from PyPDF2 import PdfReader
 
 
 def validate_pdf(file_bytes: bytes) -> bool:
-    """Check whether the provided bytes represent a valid PDF."""
+    """Quickly check whether these bytes look like a readable PDF."""
     try:
         reader = PdfReader(io.BytesIO(file_bytes))
-        # A valid PDF should have at least one page
+        # If PyPDF2 can open it and it has pages, that is good enough for our
+        # current validation needs.
         return len(reader.pages) > 0
     except Exception:
         return False
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract all text content from a PDF file provided as raw bytes.
-    Returns the concatenated text of every page separated by newlines.
-    Raises ValueError if the bytes are not a valid PDF.
+    """Pull text from every readable page in the PDF.
+
+    We keep the output simple: page text joined together with blank lines.
+    If the file is not a real PDF, we raise a clear error early.
     """
     if not validate_pdf(file_bytes):
         raise ValueError("The provided file is not a valid PDF.")
