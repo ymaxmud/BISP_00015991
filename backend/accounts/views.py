@@ -13,7 +13,12 @@ from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
 
 
 class RegisterView(generics.CreateAPIView):
-    """Legacy simple register endpoint — kept for backwards compatibility."""
+    """Old simple register endpoint.
+
+    We still keep this because some older frontend flows may call it. The
+    newer multi-step registration endpoints live elsewhere, but removing this
+    right away would break any code still using the old route.
+    """
 
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
@@ -54,9 +59,11 @@ class LoginView(generics.GenericAPIView):
 
 class SupabaseSyncView(APIView):
     """
-    Accepts a Supabase access_token from the frontend, validates it against
-    Supabase's /auth/v1/user endpoint, and returns Django JWT tokens for the
-    matching Django User (creating one on first login).
+    This endpoint is the bridge between Supabase auth and Django auth.
+
+    The frontend sends us a Supabase access token. We ask Supabase who that
+    token belongs to, then we find or create the matching Django user and
+    return our normal Django JWT tokens back to the frontend.
 
     Request body: { "access_token": "<supabase access token>" }
     Response:     { "user": {...}, "access": "...", "refresh": "..." }
@@ -81,7 +88,9 @@ class SupabaseSyncView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Ask Supabase to validate the token and return the user record.
+        # We do not trust the frontend's word about the token. We send the
+        # token back to Supabase and let Supabase tell us which user it belongs
+        # to.
         req = urllib.request.Request(
             f'{supabase_url}/auth/v1/user',
             headers={
@@ -128,7 +137,8 @@ class SupabaseSyncView(APIView):
             user.set_unusable_password()
             user.save()
         else:
-            # Backfill name if it was empty before.
+            # If the account already existed without profile names, fill in
+            # whatever we can from Supabase so the user record gets nicer over time.
             updated = False
             if not user.first_name and (first_name or metadata.get('given_name')):
                 user.first_name = first_name or metadata.get('given_name', '')
@@ -158,7 +168,7 @@ class MeView(generics.RetrieveUpdateAPIView):
 
 class IsStaffOrAdmin(permissions.BasePermission):
     """
-    Only clinic admins, super admins, or staff users can list platform users.
+    Only trusted staff-level users should be able to browse the user list.
     """
 
     def has_permission(self, request, view):
@@ -172,8 +182,10 @@ class IsStaffOrAdmin(permissions.BasePermission):
 
 class UserListView(generics.ListAPIView):
     """
-    Admin-facing user list. Supports ?role=patient|doctor|admin and full-text
-    search on email / name so the admin Users page can filter.
+    This powers the admin users screen.
+
+    The query params are intentionally simple so the frontend can filter by
+    role and search by name/email without extra backend-specific logic.
     """
 
     serializer_class = UserSerializer
