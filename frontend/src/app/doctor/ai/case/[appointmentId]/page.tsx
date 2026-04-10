@@ -68,7 +68,8 @@ export default function AICasePage() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  /* --- load patient context from appointment + intake ------------ */
+  /* First we gather all the context the AI needs.
+     Appointment data and intake data live in different places, so we merge them here. */
   const loadContext = useCallback(async () => {
     if (!appointmentId) return;
     setLoadingContext(true);
@@ -119,7 +120,8 @@ export default function AICasePage() {
     loadContext();
   }, [loadContext]);
 
-  /* --- run the orchestrator -------------------------------------- */
+  /* Once we have context, this sends one combined request to the backend
+     orchestrator instead of making the page juggle several AI calls itself. */
   const runAnalysis = useCallback(async () => {
     setAnalyzing(true);
     setAnalyzeError(null);
@@ -182,7 +184,7 @@ export default function AICasePage() {
         </div>
       )}
 
-      {/* Patient context */}
+      {/* This card gives the doctor a quick "what exactly are we analyzing?" summary. */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
         <h2 className="font-semibold text-secondary mb-3">Patient Context</h2>
         {loadingContext ? (
