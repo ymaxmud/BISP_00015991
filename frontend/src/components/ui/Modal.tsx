@@ -43,13 +43,15 @@ function Modal({ isOpen, onClose, title, children, size = "md" }: ModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+      {/* Clicking outside the panel closes the modal, which is the normal
+          expected behavior for a lightweight dialog like this. */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
 
-      {/* Panel */}
+      {/* This is the actual modal card. The `size` prop lets pages reuse the
+          same component for small confirmations and larger forms. */}
       <div
         className={clsx(
           "relative w-full bg-white rounded-2xl shadow-xl animate-fade-in",
@@ -57,7 +59,7 @@ function Modal({ isOpen, onClose, title, children, size = "md" }: ModalProps) {
           sizeStyles[size]
         )}
       >
-        {/* Header */}
+        {/* Standard modal header when a title is provided. */}
         {title && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
@@ -70,7 +72,7 @@ function Modal({ isOpen, onClose, title, children, size = "md" }: ModalProps) {
           </div>
         )}
 
-        {/* Close button when no title */}
+        {/* Even if the modal has no title, it still needs a visible close button. */}
         {!title && (
           <button
             onClick={onClose}
@@ -80,7 +82,7 @@ function Modal({ isOpen, onClose, title, children, size = "md" }: ModalProps) {
           </button>
         )}
 
-        {/* Body */}
+        {/* Page-specific content gets rendered here. */}
         <div className="px-6 py-5">{children}</div>
       </div>
     </div>
