@@ -1,10 +1,13 @@
 """
-Case Orchestrator — runs all agents and merges their outputs into a single
-unified CaseAnalysisResponse for the doctor.
+This file is the "glue" for the case-analysis flow.
 
-Each agent is wrapped in a try/except so that a single misbehaving agent
-cannot crash the whole analysis. When an agent fails, its section is marked
-as "unavailable" and a safety alert is appended so the doctor notices.
+Instead of the frontend calling four different AI helpers and trying to merge
+everything itself, the orchestrator runs each agent in one place and builds a
+single response that is easier for the doctor UI to render.
+
+One important design choice here: every agent runs behind a safety wrapper.
+So if one piece fails, we still return the rest of the analysis instead of
+crashing the whole page.
 """
 from __future__ import annotations
 
@@ -31,7 +34,7 @@ class CaseOrchestrator:
         self.medication_agent = MedicationSafetyAgent()
         self.guideline_agent = GuidelineSupportAgent()
 
-    # -- helpers --------------------------------------------------------
+    # These small helpers keep the main analyze flow easier to read.
     def _max_risk(self, *levels: str) -> str:
         seen = [lvl for lvl in levels if lvl in self.RISK_LEVELS]
         if not seen:
@@ -51,12 +54,14 @@ class CaseOrchestrator:
             return []
         return [item.strip() for item in text.split(",") if item.strip()]
 
-    # -- main entry -----------------------------------------------------
+    # This is the main workflow: collect each agent's result, merge it, then
+    # return one combined case-analysis object to the frontend.
     def analyze_case(self, request: CaseAnalysisRequest) -> CaseAnalysisResponse:
         safety_alerts: list[str] = []
         suggestions: list[str] = []
 
-        # 1. Intake summary
+        # First we turn the raw intake data into a cleaner summary. This gives
+        # the rest of the pipeline a more structured starting point.
         intake_result = self._safe_run(
             "intake",
             self.intake_agent.analyze,
@@ -86,7 +91,8 @@ class CaseOrchestrator:
             missing_info = list(intake_result.missing_information)
             urgency_indicators = list(intake_result.urgency_indicators)
 
-        # 2. Risk triage
+        # Next we estimate urgency. This is the part that decides whether the
+        # case looks low, medium, high, or critical.
         triage_result = self._safe_run(
             "triage",
             self.triage_agent.assess,
@@ -107,7 +113,8 @@ class CaseOrchestrator:
             red_flags = list(triage_result.red_flags)
             triage_notes = triage_result.triage_notes
 
-        # 3. Medication safety
+        # Then we check meds and allergies. Even if the main complaint looks
+        # mild, unsafe medication combinations still need to be surfaced.
         med_result = self._safe_run(
             "medication",
             self.medication_agent.check,
@@ -135,7 +142,8 @@ class CaseOrchestrator:
         for indicator in urgency_indicators:
             safety_alerts.append(f"[Urgency] {indicator}")
 
-        # 4. Guideline support
+        # Last, we add more "what should the doctor think about next?" style
+        # guidance like tests, referrals, and follow-up ideas.
         guideline_result = self._safe_run(
             "guideline",
             self.guideline_agent.suggest,
@@ -163,8 +171,9 @@ class CaseOrchestrator:
         for rec in med_recs:
             suggestions.append(f"[Medication Safety] {rec}")
 
-        # Uploaded reports — surface them so the doctor sees them even when
-        # the AI can't parse structured values out of them.
+        # If there is uploaded report text, we still surface a short preview.
+        # This matters because sometimes the doctor should see that the patient
+        # attached something useful even when we could not parse it neatly.
         if request.uploaded_reports_text:
             snippet = request.uploaded_reports_text.strip().splitlines()
             preview = " ".join(snippet[:5])[:400]
@@ -172,7 +181,8 @@ class CaseOrchestrator:
                 f"[Uploaded report] Review patient-submitted report: {preview}…"
             )
 
-        # Determine overall risk (highest wins)
+        # The final risk should be the highest important signal we saw, not an
+        # average. One serious warning is enough to pull the overall risk up.
         overall_risk = triage_level
         if med_alerts:
             med_risk = "high" if len(med_alerts) > 1 else "medium"
