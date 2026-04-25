@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Activity, Loader2 } from "lucide-react";
 import { AuthSession, auth } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
@@ -11,6 +11,17 @@ function routeForRole(role: string): string {
   if (role === "doctor") return "/doctor/dashboard";
   if (role === "admin" || role === "superadmin") return "/org/dashboard";
   return "/patient/dashboard";
+}
+
+/**
+ * Only allow same-origin redirects to avoid open-redirect issues.
+ * "/foo" is fine; "//evil.com" or "https://..." is not.
+ */
+function safeNext(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("/")) return null;
+  if (raw.startsWith("//")) return null;
+  return raw;
 }
 
 function storeSession(data: AuthSession) {
@@ -22,6 +33,8 @@ function storeSession(data: AuthSession) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -40,7 +53,7 @@ export default function LoginPage() {
     try {
       const data = await auth.login({ email, password });
       storeSession(data);
-      router.push(routeForRole(data.user.role));
+      router.push(next ?? routeForRole(data.user.role));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed. Please check your credentials.");
     } finally {
