@@ -49,9 +49,9 @@ export default function AuthCallbackPage() {
         localStorage.setItem("user_data", JSON.stringify(data.user));
 
         router.replace(routeForRole(data.user.role));
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
-          setError(err.message || "Sign-in failed.");
+          setError(err instanceof Error ? err.message : "Sign-in failed.");
         }
       }
     };

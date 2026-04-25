@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Send, FileText, AlertCircle } from "lucide-react";
-import Badge from "@/components/ui/Badge";
 
 const reportText = `LABORATORY REPORT
 Patient: Sardor Umarov | Date: 2026-03-25

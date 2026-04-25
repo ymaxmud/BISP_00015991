@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from organizations.models import Specialty
-from organizations.serializers import SpecialtySerializer
+from organizations.serializers import OrganizationSerializer, SpecialtySerializer
 
 from .models import DoctorProfile, DoctorSpecialty
 
@@ -16,6 +16,7 @@ class DoctorSpecialtySerializer(serializers.ModelSerializer):
 
 class DoctorProfileSerializer(serializers.ModelSerializer):
     specialties = DoctorSpecialtySerializer(many=True, read_only=True)
+    organization_detail = OrganizationSerializer(source='organization', read_only=True)
     specialty_ids = serializers.PrimaryKeyRelatedField(
         many=True, write_only=True, required=False,
         queryset=Specialty.objects.all(),
@@ -25,19 +26,25 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorProfile
         fields = [
-            'id', 'user', 'organization',
+            'id', 'organization', 'organization_detail',
             'full_name', 'gender', 'position', 'avatar',
-            'years_experience', 'education', 'license_number', 'license_document',
+            'years_experience', 'education', 'license_number',
             'working_history',
             'bio', 'languages', 'services',
             'consultation_fee', 'consultation_duration_minutes',
             'working_hours', 'accepts_new_patients',
-            'id_document', 'agreed_to_terms', 'is_verified',
-            'ai_enabled', 'ai_feature_flags',
+            'is_verified', 'ai_enabled',
             'public_slug', 'is_active', 'is_public',
             'created_at', 'specialties', 'specialty_ids',
         ]
-        read_only_fields = ['created_at']
+        read_only_fields = [
+            'organization',
+            'is_verified',
+            'ai_enabled',
+            'public_slug',
+            'is_active',
+            'created_at',
+        ]
 
     def create(self, validated_data):
         specialty_ids = validated_data.pop('_specialty_ids', [])

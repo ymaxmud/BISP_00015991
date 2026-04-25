@@ -3,14 +3,23 @@ from __future__ import annotations
 import secrets
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils.text import slugify
 from rest_framework import generics, permissions, serializers, status, viewsets
 from rest_framework.authentication import SessionAuthentication
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
+from avicenna.access import (
+    doctor_profile_id,
+    has_organization_access,
+    is_org_admin,
+    is_superadmin,
+    organization_ids_for_user,
+)
 
 class OptionalJWTAuthentication(JWTAuthentication):
     """
@@ -41,6 +50,7 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
     serializer_class = DoctorProfileSerializer
     authentication_classes = [OptionalJWTAuthentication, SessionAuthentication]
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    http_method_names = ['get', 'head', 'options', 'patch', 'put']
     lookup_field = 'public_slug'
     filterset_fields = ['organization', 'is_verified', 'is_active', 'is_public']
     search_fields = ['full_name', 'bio']
@@ -48,10 +58,18 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        # If the request is public, only return doctors that are meant to be
-        # visible on the public listing.
-        if not self.request.user.is_authenticated:
+        user = self.request.user
+        if not user.is_authenticated:
             qs = qs.filter(is_public=True, is_active=True)
+        elif is_superadmin(user):
+            pass
+        elif is_org_admin(user):
+            qs = qs.filter(organization_id__in=organization_ids_for_user(user))
+        else:
+            own_doctor_id = doctor_profile_id(user)
+            qs = qs.filter(
+                Q(is_public=True, is_active=True) | Q(id=own_doctor_id)
+            )
         specialty = self.request.query_params.get('specialty')
         if specialty:
             qs = qs.filter(specialties__specialty__slug=specialty)
@@ -59,6 +77,17 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         if city:
             qs = qs.filter(organization__city__icontains=city)
         return qs.distinct()
+
+    def update(self, request, *args, **kwargs):
+        obj = self.get_object()
+        user = request.user
+        if is_superadmin(user):
+            return super().update(request, *args, **kwargs)
+        if is_org_admin(user) and has_organization_access(user, obj.organization_id):
+            return super().update(request, *args, **kwargs)
+        if doctor_profile_id(user) == obj.id:
+            return super().update(request, *args, **kwargs)
+        raise PermissionDenied('You can only edit your own doctor profile.')
 
 
 # Everything below is for the clinic-admin flow where an organization creates

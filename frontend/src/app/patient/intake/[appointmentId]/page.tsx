@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle, ChevronRight, ClipboardList } from "lucide-react";
+import { CheckCircle, ChevronRight } from "lucide-react";
 
 const steps = ["Symptoms", "Medical Context", "Review & Submit"];
 const durations = ["Less than a day", "1-3 days", "3-7 days", "1-2 weeks", "More than 2 weeks"];

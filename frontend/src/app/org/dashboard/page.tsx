@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Calendar,
   Stethoscope,
@@ -68,6 +68,18 @@ const flaggedPatients = [
 ];
 
 export default function OrgDashboardPage() {
+  const [chartsReady, setChartsReady] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setChartsReady(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
   return (
     <div className="space-y-8">
       <div>
@@ -117,22 +129,26 @@ export default function OrgDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={appointmentTrends}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="day" tick={{ fontSize: 13 }} />
-                  <YAxis tick={{ fontSize: 13 }} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="appointments"
-                    stroke="#0d9488"
-                    strokeWidth={2}
-                    dot={{ r: 4, fill: "#0d9488" }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={appointmentTrends}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="day" tick={{ fontSize: 13 }} />
+                    <YAxis tick={{ fontSize: 13 }} />
+                    <Tooltip />
+                    <Line
+                      type="monotone"
+                      dataKey="appointments"
+                      stroke="#0d9488"
+                      strokeWidth={2}
+                      dot={{ r: 4, fill: "#0d9488" }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full rounded-lg bg-gray-50 animate-pulse" />
+              )}
             </div>
           </CardContent>
         </Card>
@@ -143,25 +159,29 @@ export default function OrgDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={doctorWorkload} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis type="number" tick={{ fontSize: 13 }} />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    width={110}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <Tooltip />
-                  <Bar
-                    dataKey="patients"
-                    fill="#0d9488"
-                    radius={[0, 6, 6, 0]}
-                    barSize={20}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {chartsReady ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={doctorWorkload} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis type="number" tick={{ fontSize: 13 }} />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      width={110}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <Tooltip />
+                    <Bar
+                      dataKey="patients"
+                      fill="#0d9488"
+                      radius={[0, 6, 6, 0]}
+                      barSize={20}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full rounded-lg bg-gray-50 animate-pulse" />
+              )}
             </div>
           </CardContent>
         </Card>

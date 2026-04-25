@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, Loader2 } from "lucide-react";
-import { auth } from "@/lib/api";
+import { AuthSession, auth } from "@/lib/api";
 import { getSupabase } from "@/lib/supabase";
 
 function routeForRole(role: string): string {
@@ -13,7 +13,7 @@ function routeForRole(role: string): string {
   return "/patient/dashboard";
 }
 
-function storeSession(data: { access: string; refresh: string; user: any }) {
+function storeSession(data: AuthSession) {
   localStorage.setItem("access_token", data.access);
   localStorage.setItem("refresh_token", data.refresh);
   localStorage.setItem("user_role", data.user.role);
@@ -41,8 +41,8 @@ export default function LoginPage() {
       const data = await auth.login({ email, password });
       storeSession(data);
       router.push(routeForRole(data.user.role));
-    } catch (err: any) {
-      setError(err.message || "Login failed. Please check your credentials.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -62,8 +62,8 @@ export default function LoginPage() {
       if (error) throw error;
       // If this succeeds, the browser leaves this page and goes to Google.
       // So there is no "success" branch to handle here locally.
-    } catch (err: any) {
-      setError(err.message || "Could not start Google sign-in.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not start Google sign-in.");
       setGoogleLoading(false);
     }
   };

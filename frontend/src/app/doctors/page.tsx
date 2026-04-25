@@ -10,34 +10,12 @@ import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { doctors as doctorsApi, specialties as specialtiesApi } from "@/lib/api";
-
-interface ApiSpecialty {
-  id: number;
-  name: string;
-  slug?: string;
-}
-
-interface ApiDoctor {
-  id: number;
-  full_name: string;
-  public_slug?: string;
-  position?: string;
-  avatar?: string | null;
-  years_experience?: number;
-  consultation_fee?: string | number;
-  bio?: string;
-  specialties?: {
-    id: number;
-    specialty_detail?: ApiSpecialty;
-  }[];
-  organization?: number;
-  organization_detail?: {
-    id: number;
-    name?: string;
-    city?: string;
-  };
-}
+import {
+  doctors as doctorsApi,
+  DoctorRecord as ApiDoctor,
+  specialties as specialtiesApi,
+  SpecialtyRecord as ApiSpecialty,
+} from "@/lib/api";
 
 const AVATAR_COLORS = [
   "bg-teal-500",
@@ -115,13 +93,8 @@ export default function DoctorsPage() {
         doctorsApi.list(),
         specialtiesApi.list().catch(() => []),
       ]);
-      const list: ApiDoctor[] = Array.isArray(doctorsRes)
-        ? doctorsRes
-        : Array.isArray(doctorsRes?.results)
-          ? doctorsRes.results
-          : [];
-      setDoctors(list);
-      setSpecialtyList(Array.isArray(specialtiesRes) ? specialtiesRes : []);
+      setDoctors(doctorsRes);
+      setSpecialtyList(specialtiesRes);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);

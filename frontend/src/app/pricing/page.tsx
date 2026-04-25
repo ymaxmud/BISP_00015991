@@ -5,20 +5,7 @@ import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { Check, X, Loader2 } from "lucide-react";
-import { billing } from "@/lib/api";
-
-interface ApiPlan {
-  id: number;
-  code: "free_doctor" | "individual_doctor" | "clinic" | string;
-  name: string;
-  description?: string;
-  price_monthly: string | number;
-  currency?: string;
-  max_doctors: number;
-  ai_enabled: boolean;
-  features?: string[];
-  is_active?: boolean;
-}
+import { billing, SubscriptionPlanRecord as ApiPlan } from "@/lib/api";
 
 interface DisplayPlan {
   code: string;
@@ -166,12 +153,7 @@ export default function PricingPage() {
     (async () => {
       try {
         const data = await billing.listPlans();
-        const list: ApiPlan[] = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.results)
-            ? data.results
-            : [];
-        if (!cancelled) setApiPlans(list);
+        if (!cancelled) setApiPlans(data);
       } catch {
         if (!cancelled) setApiPlans(null);
       } finally {

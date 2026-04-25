@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Trash2, Upload } from "lucide-react";
-import { auth } from "@/lib/api";
+import { auth, ReportUploadRecord } from "@/lib/api";
 import WizardShell from "@/components/wizard/WizardShell";
 
 type FamilyMember = {
@@ -86,7 +86,7 @@ export default function PatientRegisterPage() {
 
   // Optional report upload step.
   const [reportFile, setReportFile] = useState<File | null>(null);
-  const [reportAnalysis, setReportAnalysis] = useState<any>(null);
+  const [reportAnalysis, setReportAnalysis] = useState<ReportUploadRecord | null>(null);
   const [analysingReport, setAnalysingReport] = useState(false);
 
   const addFamilyMember = () =>
@@ -135,13 +135,13 @@ export default function PatientRegisterPage() {
         body: form,
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+        const body = (await res.json().catch(() => ({}))) as { detail?: string };
         throw new Error(body.detail || "Failed to analyse report");
       }
-      const data = await res.json();
+      const data = (await res.json()) as ReportUploadRecord;
       setReportAnalysis(data);
-    } catch (e: any) {
-      setError(e.message || "Could not analyse report");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not analyse report");
     } finally {
       setAnalysingReport(false);
     }
@@ -217,8 +217,8 @@ export default function PatientRegisterPage() {
       }
 
       router.push("/patient/dashboard");
-    } catch (e: any) {
-      setError(e.message || "Registration failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -654,14 +654,14 @@ export default function PatientRegisterPage() {
                 AI report summary
               </div>
               <p className="text-muted mb-2">{reportAnalysis.analysis.summary}</p>
-              {reportAnalysis.analysis.abnormal_values?.length > 0 && (
+              {(reportAnalysis.analysis.abnormal_values?.length ?? 0) > 0 && (
                 <div>
                   <div className="font-medium text-secondary mb-1">
                     Abnormal values
                   </div>
                   <ul className="list-disc list-inside text-muted space-y-0.5">
-                    {reportAnalysis.analysis.abnormal_values.map(
-                      (av: any, i: number) => (
+                    {(reportAnalysis.analysis.abnormal_values ?? []).map(
+                      (av, i: number) => (
                         <li key={i}>
                           {av.parameter}: {av.value} {av.unit} ({av.status})
                         </li>

@@ -15,12 +15,32 @@ import {
   AlertTriangle,
   X,
   RefreshCw,
+  type LucideIcon,
 } from "lucide-react";
-import { ai } from "@/lib/api";
+import {
+  ai,
+  CaseAnalysisRecord,
+  MedicationSafetyRecord,
+  ReportAnalysisRecord,
+  ReportUploadRecord,
+} from "@/lib/api";
 
 type StepKey = "patient" | "medication" | "report" | "overall";
 
-const STEPS: { key: StepKey; title: string; description: string; icon: any }[] = [
+type RiskLevel = "low" | "moderate" | "high" | "critical";
+
+type CaseResult = CaseAnalysisRecord;
+
+type MedicationResult = MedicationSafetyRecord;
+
+type ReportResult = ReportAnalysisRecord;
+
+const STEPS: {
+  key: StepKey;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+}[] = [
   {
     key: "patient",
     title: "Patient Information",
@@ -98,9 +118,9 @@ export default function DoctorAIPage() {
 
   // Each step stores its own result so the doctor can move back and forth
   // without losing what was already generated.
-  const [caseResult, setCaseResult] = useState<any>(null);
-  const [medResult, setMedResult] = useState<any>(null);
-  const [reportResult, setReportResult] = useState<any>(null);
+  const [caseResult, setCaseResult] = useState<CaseResult | null>(null);
+  const [medResult, setMedResult] = useState<MedicationResult | null>(null);
+  const [reportResult, setReportResult] = useState<ReportResult | null>(null);
 
   // Loading and error states stay separate per step so one failure does not
   // make the whole page feel broken.
@@ -171,8 +191,8 @@ export default function DoctorAIPage() {
       }));
 
       goNext();
-    } catch (err: any) {
-      setCaseError(err.message || "Failed to analyze case");
+    } catch (err: unknown) {
+      setCaseError(err instanceof Error ? err.message : "Failed to analyze case");
     } finally {
       setCaseLoading(false);
     }
@@ -198,10 +218,12 @@ export default function DoctorAIPage() {
           .map((s) => s.trim())
           .filter(Boolean),
       });
-      setMedResult(data);
+      setMedResult(data as MedicationResult);
       goNext();
-    } catch (err: any) {
-      setMedError(err.message || "Failed to check medication safety");
+    } catch (err: unknown) {
+      setMedError(
+        err instanceof Error ? err.message : "Failed to check medication safety"
+      );
     } finally {
       setMedLoading(false);
     }
@@ -223,13 +245,13 @@ export default function DoctorAIPage() {
       const patientContext = buildPatientContext(patientForm);
 
       if (reportFile) {
-        const data = await ai.reportUpload(reportFile, patientContext);
+        const data: ReportUploadRecord = await ai.reportUpload(reportFile, patientContext);
         setReportUploadInfo({
-          filename: data.filename,
-          extracted_text: data.extracted_text,
+          filename: data.filename || reportFile.name,
+          extracted_text: data.extracted_text || "",
         });
         setReportText(data.extracted_text || "");
-        setReportResult(data.analysis);
+        setReportResult(data.analysis || null);
       } else if (reportText.trim()) {
         const data = await ai.reportAnalysis({
           report_text: reportText,
@@ -243,8 +265,8 @@ export default function DoctorAIPage() {
       }
 
       goNext();
-    } catch (err: any) {
-      setReportError(err.message || "Failed to analyze report");
+    } catch (err: unknown) {
+      setReportError(err instanceof Error ? err.message : "Failed to analyze report");
     } finally {
       setReportLoading(false);
     }
@@ -830,9 +852,9 @@ function OverallStep({
   onReset,
 }: {
   patient: PatientForm;
-  caseResult: any;
-  medResult: any;
-  reportResult: any;
+  caseResult: CaseResult | null;
+  medResult: MedicationResult | null;
+  reportResult: ReportResult | null;
   onBack: () => void;
   onRerun: () => void;
   rerunning: boolean;
@@ -995,7 +1017,7 @@ function OverallStep({
       )}
 
       {/* Abnormal values table */}
-      {reportResult?.abnormal_values?.length > 0 && (
+      {(reportResult?.abnormal_values?.length ?? 0) > 0 && (
         <Section title="Abnormal Lab Values" icon={<FileText size={16} />} tone="red">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -1008,7 +1030,7 @@ function OverallStep({
                 </tr>
               </thead>
               <tbody>
-                {reportResult.abnormal_values.map((v: any, i: number) => (
+                {(reportResult?.abnormal_values ?? []).map((v, i: number) => (
                   <tr key={i} className="border-b border-gray-50">
                     <td className="py-2 pr-4 font-medium text-secondary">
                       {v.parameter}
@@ -1070,19 +1092,19 @@ function buildPatientContext(p: PatientForm): string {
 }
 
 function buildOverall(
-  caseResult: any,
-  medResult: any,
-  reportResult: any
+  caseResult: CaseResult | null,
+  medResult: MedicationResult | null,
+  reportResult: ReportResult | null
 ): {
-  overallRisk: "low" | "moderate" | "high" | "critical";
+  overallRisk: RiskLevel;
   headline: string;
   alerts: string[];
   recommendations: string[];
 } {
-  const riskOrder = ["low", "moderate", "high", "critical"];
-  let risk = "low";
+  const riskOrder: RiskLevel[] = ["low", "moderate", "high", "critical"];
+  let risk: RiskLevel = "low";
 
-  if (caseResult?.risk_level && riskOrder.includes(caseResult.risk_level)) {
+  if (caseResult?.risk_level && isRiskLevel(caseResult.risk_level)) {
     if (riskOrder.indexOf(caseResult.risk_level) > riskOrder.indexOf(risk)) {
       risk = caseResult.risk_level;
     }
@@ -1097,11 +1119,11 @@ function buildOverall(
 
   const alerts: string[] = [];
   (caseResult?.safety_alerts || []).forEach((a: string) => alerts.push(a));
-  (medResult?.alerts || []).forEach((a: any) => {
+  (medResult?.alerts || []).forEach((a) => {
     const txt = a.description || a.message || a.type;
     if (txt) alerts.push(`${a.type ? a.type + ": " : ""}${a.description || a.message || ""}`.trim());
   });
-  (reportResult?.abnormal_values || []).forEach((v: any) => {
+  (reportResult?.abnormal_values || []).forEach((v) => {
     alerts.push(
       `${v.parameter} ${v.status === "high" ? "elevated" : "low"} at ${v.value} ${v.unit}`
     );
@@ -1124,7 +1146,7 @@ function buildOverall(
   const headline = headlineParts.join(" ");
 
   return {
-    overallRisk: risk as any,
+    overallRisk: risk,
     headline,
     alerts: dedupe(alerts).slice(0, 10),
     recommendations: dedupe(recommendations).slice(0, 12),
@@ -1139,6 +1161,10 @@ function dedupe(arr: string[]): string[] {
     seen.add(key);
     return true;
   });
+}
+
+function isRiskLevel(value: string): value is RiskLevel {
+  return ["low", "moderate", "high", "critical"].includes(value);
 }
 
 // ===========================================================================

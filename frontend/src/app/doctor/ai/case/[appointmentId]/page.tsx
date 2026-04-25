@@ -10,7 +10,14 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
-import { ai, appointments as appointmentsApi, intake as intakeApi } from "@/lib/api";
+import {
+  ApiRecord,
+  AppointmentRecord,
+  ai,
+  appointments as appointmentsApi,
+  CaseAnalysisRecord,
+  intake as intakeApi,
+} from "@/lib/api";
 
 interface PatientContext {
   patient_name: string;
@@ -22,15 +29,6 @@ interface PatientContext {
   history: string;
   allergies: string;
   medications: string;
-}
-
-interface CaseAnalysisResult {
-  summary: string;
-  extracted_facts: Record<string, string>;
-  risk_level: string;
-  safety_alerts: string[];
-  suggestions: string[];
-  triage_notes: string;
 }
 
 const riskStyles: Record<string, string> = {
@@ -52,6 +50,11 @@ const EMPTY_CONTEXT: PatientContext = {
   medications: "",
 };
 
+function getString(record: ApiRecord | null, key: string): string {
+  const value = record?.[key];
+  return typeof value === "string" ? value : "";
+}
+
 export default function AICasePage() {
   const params = useParams();
   const appointmentIdRaw = params?.appointmentId;
@@ -64,7 +67,7 @@ export default function AICasePage() {
   const [contextError, setContextError] = useState<string | null>(null);
 
   const [analyzing, setAnalyzing] = useState(false);
-  const [result, setResult] = useState<CaseAnalysisResult | null>(null);
+  const [result, setResult] = useState<CaseAnalysisRecord | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -76,37 +79,30 @@ export default function AICasePage() {
     setContextError(null);
     try {
       const id = Number(appointmentId);
-      const allAppointments = await appointmentsApi.list().catch(() => []);
-      const list = Array.isArray(allAppointments) ? allAppointments : [];
-      const appt = list.find((a: any) => Number(a?.id) === id);
+      const allAppointments = await appointmentsApi.list().catch(
+        () => [] as AppointmentRecord[]
+      );
+      const appt = allAppointments.find((appointment) => Number(appointment.id) === id);
 
-      let intakeForm: any = null;
+      let intakeForm: ApiRecord | null = null;
       try {
         const intakeRes = await intakeApi.get(id);
-        if (Array.isArray(intakeRes) && intakeRes.length > 0) {
-          intakeForm = intakeRes[0];
-        } else if (intakeRes?.results?.length) {
-          intakeForm = intakeRes.results[0];
-        } else if (intakeRes && !Array.isArray(intakeRes)) {
-          intakeForm = intakeRes;
-        }
+        intakeForm = intakeRes[0] || null;
       } catch {
         intakeForm = null;
       }
 
       setContext({
         patient_name:
-          appt?.patient_name ||
-          appt?.patient_profile_detail?.user?.first_name ||
-          `Patient #${appt?.patient_profile ?? "—"}`,
-        age: Number(appt?.patient_age ?? appt?.age ?? 0) || 0,
-        gender: appt?.patient_gender || appt?.gender || "unknown",
-        symptoms: intakeForm?.symptoms || appt?.reason || "",
-        duration: intakeForm?.duration || "",
-        severity: intakeForm?.severity || "moderate",
-        history: intakeForm?.history_text || "",
-        allergies: intakeForm?.allergies_text || "",
-        medications: intakeForm?.medications_text || "",
+          appt?.patient_name || `Patient #${appt?.patient_profile ?? "—"}`,
+        age: 0,
+        gender: "unknown",
+        symptoms: getString(intakeForm, "symptoms") || appt?.reason || "",
+        duration: getString(intakeForm, "duration"),
+        severity: getString(intakeForm, "severity") || "moderate",
+        history: getString(intakeForm, "history_text"),
+        allergies: getString(intakeForm, "allergies_text"),
+        medications: getString(intakeForm, "medications_text"),
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -138,7 +134,7 @@ export default function AICasePage() {
         allergies: context.allergies || "",
         medications: context.medications || "",
       });
-      setResult(data as CaseAnalysisResult);
+      setResult(data);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setAnalyzeError(msg);

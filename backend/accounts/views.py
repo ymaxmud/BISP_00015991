@@ -3,12 +3,16 @@ import os
 import urllib.error
 import urllib.request
 
+from django.db.models import Q
 from rest_framework import filters, generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from avicenna.access import doctor_profile_id, is_superadmin, organization_ids_for_user
+
 from .models import User
+from .registration import ensure_patient_profile
 from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
 
 
@@ -149,6 +153,9 @@ class SupabaseSyncView(APIView):
             if updated:
                 user.save()
 
+        if user.role == User.Role.PATIENT:
+            ensure_patient_profile(user)
+
         refresh = RefreshToken.for_user(user)
         return Response({
             'user': UserSerializer(user).data,
@@ -197,6 +204,20 @@ class UserListView(generics.ListAPIView):
 
     def get_queryset(self):
         qs = User.objects.all()
+        user = self.request.user
+        if not is_superadmin(user):
+            org_ids = organization_ids_for_user(user)
+            doctor_id = doctor_profile_id(user)
+            if org_ids:
+                qs = qs.filter(
+                    Q(staff_roles__organization_id__in=org_ids)
+                    | Q(doctor_profile__organization_id__in=org_ids)
+                    | Q(patient_profile__appointments__organization_id__in=org_ids)
+                ).distinct()
+            elif doctor_id:
+                qs = qs.filter(id=user.id)
+            else:
+                return qs.none()
         role = self.request.query_params.get('role')
         if role:
             qs = qs.filter(role=role)

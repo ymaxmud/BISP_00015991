@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -13,7 +13,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 
@@ -52,17 +52,18 @@ const statusBadge: Record<string, { label: string; variant: "info" | "success" |
 };
 
 export default function PatientDashboardPage() {
-  const [userName, setUserName] = useState("Sardor");
-
-  useEffect(() => {
+  const [userName] = useState(() => {
     try {
       const raw = localStorage.getItem("user_data");
       if (raw) {
         const data = JSON.parse(raw);
-        if (data.first_name) setUserName(data.first_name);
+        if (typeof data.first_name === "string" && data.first_name.trim()) {
+          return data.first_name;
+        }
       }
     } catch {}
-  }, []);
+    return "Sardor";
+  });
 
   return (
     <div className="space-y-8">

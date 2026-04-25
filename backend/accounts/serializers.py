@@ -17,6 +17,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             'username': {'required': False},
         }
 
+    def validate_role(self, value):
+        request = self.context.get('request')
+        if request and request.user and request.user.is_authenticated and request.user.is_superuser:
+            return value
+        if value != User.Role.PATIENT:
+            raise serializers.ValidationError(
+                'Public registration can only create patient accounts.'
+            )
+        return value
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         # Auto-generate username from email if not provided

@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Calendar, Pill, Bell, Upload, Star, Users, Settings,
   ListOrdered, UserSearch, Brain, FileText, UserCircle, BarChart3,
-  Building2, Menu, X, Activity,
+  Menu, X, Activity,
 } from "lucide-react";
 
 const navItems: Record<string, { label: string; href: string; icon: React.ReactNode }[]> = {

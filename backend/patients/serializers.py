@@ -14,13 +14,14 @@ class MedicalHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = MedicalHistory
         fields = '__all__'
-        read_only_fields = ['last_updated_at']
+        read_only_fields = ['patient_profile', 'last_updated_at']
 
 
 class FamilyMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = FamilyMember
         fields = '__all__'
+        read_only_fields = ['patient_profile']
 
 
 class ChronicConditionSerializer(serializers.ModelSerializer):
@@ -60,4 +61,4 @@ class PatientProfileSerializer(serializers.ModelSerializer):
             'medical_history', 'family_members',
             'chronic_conditions', 'medications', 'intake_symptoms',
         ]
-        read_only_fields = ['created_at']
+        read_only_fields = ['user', 'created_at']

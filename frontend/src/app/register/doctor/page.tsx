@@ -3,21 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
-import { auth, billing, specialties as specialtiesApi } from "@/lib/api";
+import {
+  auth,
+  billing,
+  SpecialtyRecord as Specialty,
+  specialties as specialtiesApi,
+  SubscriptionPlanRecord as Plan,
+} from "@/lib/api";
 import WizardShell from "@/components/wizard/WizardShell";
-
-type Plan = {
-  id: number;
-  code: string;
-  name: string;
-  description: string;
-  price_monthly: string;
-  max_doctors: number;
-  ai_enabled: boolean;
-  features: string[];
-};
-
-type Specialty = { id: number; name: string; slug: string };
 
 const STEPS = [
   { title: "Account" },
@@ -97,10 +90,9 @@ export default function DoctorRegisterPage() {
   useEffect(() => {
     billing
       .listPlans()
-      .then((res: any) => {
-        const items = Array.isArray(res) ? res : res.results || [];
+      .then((items) => {
         setPlans(
-          items.filter((p: Plan) =>
+          items.filter((p) =>
             ["free_doctor", "individual_doctor"].includes(p.code)
           )
         );
@@ -108,10 +100,7 @@ export default function DoctorRegisterPage() {
       .catch(() => setPlans([]));
     specialtiesApi
       .list()
-      .then((res: any) => {
-        const items = Array.isArray(res) ? res : res.results || [];
-        setSpecialtyList(items);
-      })
+      .then((items) => setSpecialtyList(items))
       .catch(() => setSpecialtyList([]));
   }, []);
 
@@ -186,8 +175,8 @@ export default function DoctorRegisterPage() {
       localStorage.setItem("user_role", data.user.role);
       localStorage.setItem("user_data", JSON.stringify(data.user));
       router.push("/doctor/dashboard");
-    } catch (e: any) {
-      setError(e.message || "Registration failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -524,12 +513,12 @@ export default function DoctorRegisterPage() {
                     {selected && <Check className="text-primary" size={18} />}
                   </div>
                   <div className="text-2xl font-bold text-secondary mb-2">
-                    ${parseFloat(p.price_monthly).toFixed(0)}
+                    ${Number(p.price_monthly).toFixed(0)}
                     <span className="text-sm text-muted font-normal">/mo</span>
                   </div>
-                  <p className="text-xs text-muted mb-2">{p.description}</p>
+                  <p className="text-xs text-muted mb-2">{p.description || ""}</p>
                   <ul className="text-xs text-muted space-y-0.5">
-                    {p.features.slice(0, 4).map((f, i) => (
+                    {(p.features || []).slice(0, 4).map((f, i) => (
                       <li key={i}>• {f}</li>
                     ))}
                   </ul>

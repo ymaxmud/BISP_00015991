@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Settings, Bell, Globe, Shield, Save } from "lucide-react";
+import { Bell, Globe, Shield, Save } from "lucide-react";
 
 export default function DoctorSettingsPage() {
   const [saved, setSaved] = useState(false);

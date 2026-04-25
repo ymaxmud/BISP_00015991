@@ -3,18 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Plus, Trash2 } from "lucide-react";
-import { auth, billing } from "@/lib/api";
+import { auth, billing, SubscriptionPlanRecord as Plan } from "@/lib/api";
 import WizardShell from "@/components/wizard/WizardShell";
-
-type Plan = {
-  id: number;
-  code: string;
-  name: string;
-  description: string;
-  price_monthly: string;
-  max_doctors: number;
-  features: string[];
-};
 
 const STEPS = [
   { title: "Account" },
@@ -83,12 +73,9 @@ export default function ClinicRegisterPage() {
   useEffect(() => {
     billing
       .listPlans()
-      .then((res: any) => {
-        const items = Array.isArray(res) ? res : res.results || [];
+      .then((items) => {
         setPlans(
-          items.filter((p: Plan) =>
-            ["individual_doctor", "clinic"].includes(p.code)
-          )
+          items.filter((p) => ["individual_doctor", "clinic"].includes(p.code))
         );
       })
       .catch(() => setPlans([]));
@@ -159,8 +146,8 @@ export default function ClinicRegisterPage() {
       localStorage.setItem("user_role", data.user.role);
       localStorage.setItem("user_data", JSON.stringify(data.user));
       router.push("/org/dashboard");
-    } catch (e: any) {
-      setError(e.message || "Registration failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -405,16 +392,16 @@ export default function ClinicRegisterPage() {
                     {selected && <Check className="text-primary" size={18} />}
                   </div>
                   <div className="text-2xl font-bold text-secondary mb-1">
-                    ${parseFloat(p.price_monthly).toFixed(0)}
+                    ${Number(p.price_monthly).toFixed(0)}
                     <span className="text-sm text-muted font-normal">/mo</span>
                   </div>
                   <div className="text-xs text-primary font-medium mb-2">
                     Up to {p.max_doctors} doctor
                     {p.max_doctors > 1 ? "s" : ""}
                   </div>
-                  <p className="text-xs text-muted mb-2">{p.description}</p>
+                  <p className="text-xs text-muted mb-2">{p.description || ""}</p>
                   <ul className="text-xs text-muted space-y-0.5">
-                    {p.features.slice(0, 5).map((f, i) => (
+                    {(p.features || []).slice(0, 5).map((f, i) => (
                       <li key={i}>• {f}</li>
                     ))}
                   </ul>
@@ -434,7 +421,7 @@ export default function ClinicRegisterPage() {
           <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
             <span className="text-sm text-muted">Plan total</span>
             <span className="text-lg font-semibold text-secondary">
-              ${selectedPlan ? parseFloat(selectedPlan.price_monthly).toFixed(2) : "0.00"}
+              ${selectedPlan ? Number(selectedPlan.price_monthly).toFixed(2) : "0.00"}
               /mo
             </span>
           </div>
@@ -517,7 +504,7 @@ export default function ClinicRegisterPage() {
             label="Plan"
             value={
               selectedPlan
-                ? `${selectedPlan.name} — $${parseFloat(
+                ? `${selectedPlan.name} — $${Number(
                     selectedPlan.price_monthly
                   ).toFixed(0)}/mo, up to ${selectedPlan.max_doctors} doctors`
                 : "—"

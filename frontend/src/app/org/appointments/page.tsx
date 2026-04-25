@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Calendar,
   Search,
@@ -8,10 +8,8 @@ import {
   MoreHorizontal,
   Video,
   MapPin,
-  Filter,
   Plus,
   Clock,
-  User,
   Stethoscope,
   X,
   CalendarClock,

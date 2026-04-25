@@ -1,35 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Settings, Bell, Globe, User, Save } from "lucide-react";
+import { useState } from "react";
+import { Bell, Globe, User, Save } from "lucide-react";
 
 export default function PatientSettingsPage() {
   const [saved, setSaved] = useState(false);
-  const [profile, setProfile] = useState({
-    first_name: "",
-    last_name: "",
-    phone: "",
-    language: "uz",
-    notifications_email: true,
-    notifications_sms: true,
-    reminders: true,
-  });
-
-  useEffect(() => {
+  const [profile, setProfile] = useState(() => {
     try {
       const userData = localStorage.getItem("user_data");
       if (userData) {
-        const user = JSON.parse(userData);
-        setProfile((prev) => ({
-          ...prev,
+        const user = JSON.parse(userData) as {
+          first_name?: string;
+          last_name?: string;
+          phone?: string;
+          preferred_language?: string;
+        };
+        return {
           first_name: user.first_name || "",
           last_name: user.last_name || "",
           phone: user.phone || "",
           language: user.preferred_language || "uz",
-        }));
+          notifications_email: true,
+          notifications_sms: true,
+          reminders: true,
+        };
       }
     } catch {}
-  }, []);
+    return {
+      first_name: "",
+      last_name: "",
+      phone: "",
+      language: "uz",
+      notifications_email: true,
+      notifications_sms: true,
+      reminders: true,
+    };
+  });
 
   const handleSave = () => {
     setSaved(true);

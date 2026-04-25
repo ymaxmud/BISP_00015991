@@ -67,6 +67,26 @@ def _unique_slug(base: str, model, field: str = 'public_slug') -> str:
     return candidate
 
 
+def ensure_patient_profile(user: User) -> tuple[PatientProfile, bool]:
+    """
+    Some auth flows only create the user first and need the patient records later.
+
+    Keeping this in one helper means Google/Supabase sign-in and the normal
+    registration flow can both end up with the same minimum patient data shape.
+    """
+
+    profile, created = PatientProfile.objects.get_or_create(
+        user=user,
+        defaults={
+            'first_name': user.first_name or '',
+            'last_name': user.last_name or '',
+        },
+    )
+    if created:
+        MedicalHistory.objects.create(patient_profile=profile)
+    return profile, created
+
+
 # Patient registration is split into nested serializer pieces so each step of
 # the frontend wizard maps cleanly to one part of the backend payload.
 class _FamilyMemberInput(serializers.Serializer):
@@ -153,18 +173,17 @@ class PatientRegistrationSerializer(serializers.Serializer):
         user.set_password(validated_data['password'])
         user.save()
 
-        profile = PatientProfile.objects.create(
-            user=user,
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', ''),
-            dob=validated_data.get('dob'),
-            gender=validated_data.get('gender') or '',
-            height_cm=validated_data.get('height_cm'),
-            weight_kg=validated_data.get('weight_kg'),
-            smoking=validated_data.get('smoking') or '',
-            alcohol=validated_data.get('alcohol') or '',
-            physical_activity=validated_data.get('physical_activity') or '',
-        )
+        profile, _ = ensure_patient_profile(user)
+        profile.first_name = validated_data.get('first_name', '')
+        profile.last_name = validated_data.get('last_name', '')
+        profile.dob = validated_data.get('dob')
+        profile.gender = validated_data.get('gender') or ''
+        profile.height_cm = validated_data.get('height_cm')
+        profile.weight_kg = validated_data.get('weight_kg')
+        profile.smoking = validated_data.get('smoking') or ''
+        profile.alcohol = validated_data.get('alcohol') or ''
+        profile.physical_activity = validated_data.get('physical_activity') or ''
+        profile.save()
 
         for fm in family:
             FamilyMember.objects.create(patient_profile=profile, **fm)
@@ -181,17 +200,20 @@ class PatientRegistrationSerializer(serializers.Serializer):
         # Some older parts of the product still expect one flat
         # `MedicalHistory` row, so we keep creating it even though the newer
         # structured models are the real source of truth now.
-        MedicalHistory.objects.create(
-            patient_profile=profile,
-            chronic_conditions=', '.join(
-                (c.get('label') or dict(ChronicCondition.Code.choices).get(c['code'], c['code']))
-                for c in conditions
-            ),
-            allergies=allergies,
-            current_medications=', '.join(
-                f"{m['name']} {m.get('dosage', '')}".strip() for m in medications
-            ),
+        medical_history = getattr(profile, 'medical_history', None)
+        if medical_history is None:
+            medical_history = MedicalHistory.objects.create(
+                patient_profile=profile,
+            )
+        medical_history.chronic_conditions = ', '.join(
+            (c.get('label') or dict(ChronicCondition.Code.choices).get(c['code'], c['code']))
+            for c in conditions
         )
+        medical_history.allergies = allergies
+        medical_history.current_medications = ', '.join(
+            f"{m['name']} {m.get('dosage', '')}".strip() for m in medications
+        )
+        medical_history.save()
 
         return user
 

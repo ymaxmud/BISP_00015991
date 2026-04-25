@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Save, Building2 } from "lucide-react";
 
+type NotificationKey = "emailNotif" | "smsNotif" | "reminders";
+
 export default function OrgSettingsPage() {
   const [form, setForm] = useState({
     name: "Avicenna Medical Center", address: "12 Amir Temur Avenue", city: "Tashkent",
@@ -46,7 +48,19 @@ export default function OrgSettingsPage() {
             ].map((item) => (
               <label key={item.key} className="flex items-center justify-between">
                 <span className="text-sm text-secondary">{item.label}</span>
-                <div className={`w-10 h-6 rounded-full transition-colors cursor-pointer flex items-center ${(form as any)[item.key] ? "bg-primary justify-end" : "bg-gray-200 justify-start"}`} onClick={() => setForm({ ...form, [item.key]: !(form as any)[item.key] })}>
+                <div
+                  className={`w-10 h-6 rounded-full transition-colors cursor-pointer flex items-center ${
+                    form[item.key as NotificationKey]
+                      ? "bg-primary justify-end"
+                      : "bg-gray-200 justify-start"
+                  }`}
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      [item.key]: !form[item.key as NotificationKey],
+                    })
+                  }
+                >
                   <div className="w-4 h-4 bg-white rounded-full mx-1 shadow-sm" />
                 </div>
               </label>

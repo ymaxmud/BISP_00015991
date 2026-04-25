@@ -7,8 +7,6 @@ import {
   Eye,
   X,
   ChevronDown,
-  Phone,
-  Mail,
   Trash2,
   Upload,
   RefreshCw,
@@ -20,7 +18,11 @@ import {
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
-import { doctors as doctorsApi, specialties as specialtiesApi } from "@/lib/api";
+import {
+  doctors as doctorsApi,
+  specialties as specialtiesApi,
+  SpecialtyRecord,
+} from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -48,7 +50,7 @@ interface WorkingHistoryEntry {
 interface DoctorRecord {
   id: number;
   user?: number;
-  organization?: number;
+  organization?: number | null;
   full_name: string;
   gender?: string;
   position?: string;
@@ -70,11 +72,7 @@ interface DoctorRecord {
   ai_enabled?: boolean;
 }
 
-interface Specialty {
-  id: number;
-  name: string;
-  slug?: string;
-}
+type Specialty = SpecialtyRecord;
 
 interface NewDoctorForm {
   first_name: string;
@@ -313,12 +311,7 @@ export default function OrgDoctorsPage() {
     setListError(null);
     try {
       const data = await doctorsApi.list();
-      const list: DoctorRecord[] = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.results)
-          ? data.results
-          : [];
-      setDoctors(list);
+      setDoctors(data);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setListError(msg);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, Check, Pill, Calendar, Clock } from "lucide-react";
+import { Check, Pill, Calendar, Clock } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 
 const initialReminders = [
