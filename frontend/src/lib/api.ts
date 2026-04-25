@@ -34,6 +34,9 @@ export interface OrganizationRecord {
   name: string;
   slug?: string;
   city?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
 }
 
 export interface SpecialtyRecord {
@@ -334,6 +337,11 @@ export const organizations = {
       `${API_BASE}/organizations/${params ? `?${params}` : ""}`
     ),
   get: (slug: string) => request<OrganizationRecord>(`${API_BASE}/organizations/${slug}/`),
+  update: (slug: string, data: Record<string, unknown>) =>
+    request<OrganizationRecord>(`${API_BASE}/organizations/${slug}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 // Specialties are split out because many screens need them for dropdowns.

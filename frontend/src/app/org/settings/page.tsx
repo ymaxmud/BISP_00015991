@@ -1,21 +1,118 @@
 "use client";
 
-import { useState } from "react";
-import { Save, Building2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Save, Building2, CheckCircle2, AlertCircle } from "lucide-react";
+import { organizations as orgsApi } from "@/lib/api";
 
 type NotificationKey = "emailNotif" | "smsNotif" | "reminders";
 
+type SettingsForm = {
+  name: string;
+  address: string;
+  city: string;
+  phone: string;
+  email: string;
+  workStart: string;
+  workEnd: string;
+  emailNotif: boolean;
+  smsNotif: boolean;
+  reminders: boolean;
+};
+
+const DEFAULT_FORM: SettingsForm = {
+  name: "Avicenna Medical Center",
+  address: "12 Amir Temur Avenue",
+  city: "Tashkent",
+  phone: "+998 71 200 0001",
+  email: "info@avicenna.uz",
+  workStart: "08:00",
+  workEnd: "18:00",
+  emailNotif: true,
+  smsNotif: false,
+  reminders: true,
+};
+
+const STORAGE_KEY = "clinic_settings";
+
 export default function OrgSettingsPage() {
-  const [form, setForm] = useState({
-    name: "Avicenna Medical Center", address: "12 Amir Temur Avenue", city: "Tashkent",
-    phone: "+998 71 200 0001", email: "info@avicenna.uz",
-    workStart: "08:00", workEnd: "18:00",
-    emailNotif: true, smsNotif: false, reminders: true,
-  });
+  const [form, setForm] = useState<SettingsForm>(DEFAULT_FORM);
+  const [orgSlug, setOrgSlug] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ kind: "ok" | "err"; msg: string } | null>(
+    null
+  );
+
+  // Load any previously saved settings + try to fetch the user's org from backend.
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        setForm({ ...DEFAULT_FORM, ...JSON.parse(stored) });
+      } catch {
+        // ignore corrupt cache
+      }
+    }
+
+    (async () => {
+      try {
+        const orgs = await orgsApi.list();
+        if (orgs && orgs.length > 0) {
+          const o = orgs[0];
+          setOrgSlug(o.slug ?? null);
+          setForm((prev) => ({
+            ...prev,
+            name: o.name ?? prev.name,
+            address: o.address ?? prev.address,
+            city: o.city ?? prev.city,
+            phone: o.phone ?? prev.phone,
+            email: o.email ?? prev.email,
+          }));
+        }
+      } catch {
+        // backend optional — fall back to localStorage values
+      }
+    })();
+  }, []);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Always persist locally so non-backend fields (hours, notification toggles)
+      // survive across reloads.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
+
+      // Push backend-supported fields to the API when we know the slug.
+      if (orgSlug) {
+        await orgsApi.update(orgSlug, {
+          name: form.name,
+          address: form.address,
+          city: form.city,
+          phone: form.phone,
+          email: form.email,
+        });
+      }
+
+      setToast({ kind: "ok", msg: "Settings saved successfully" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not save settings";
+      setToast({ kind: "err", msg });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-secondary mb-6">Clinic Settings</h1>
+      <div className="pl-12 md:pl-0 mb-6">
+        <h1 className="text-2xl font-bold text-secondary">Clinic Settings</h1>
+      </div>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 space-y-6">
         <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
           <div className="w-16 h-16 rounded-xl bg-teal-50 flex items-center justify-center"><Building2 size={28} className="text-primary" /></div>
@@ -68,7 +165,29 @@ export default function OrgSettingsPage() {
           </div>
         </div>
 
-        <button className="px-6 py-2.5 bg-primary text-white rounded-lg hover:bg-primary-dark font-medium flex items-center gap-2"><Save size={16} /> Save Settings</button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-6 py-2.5 bg-primary text-white rounded-lg hover:bg-primary-dark font-medium flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Save size={16} /> {saving ? "Saving…" : "Save Settings"}
+          </button>
+          {toast && (
+            <div
+              className={`flex items-center gap-2 text-sm ${
+                toast.kind === "ok" ? "text-emerald-600" : "text-red-600"
+              }`}
+            >
+              {toast.kind === "ok" ? (
+                <CheckCircle2 size={16} />
+              ) : (
+                <AlertCircle size={16} />
+              )}
+              {toast.msg}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
