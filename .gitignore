@@ -1,8 +1,3 @@
-# Editor / tooling
-.claude/
-CLAUDE.md
-AGENTS.md
-
 # Python
 __pycache__/
 *.py[cod]
