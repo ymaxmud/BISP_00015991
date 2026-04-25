@@ -56,7 +56,7 @@ export default function DoctorReportsPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 pl-12 md:pl-0">
         <div>
           <h1 className="text-2xl font-bold text-secondary">Patient Reports</h1>
           <p className="text-muted">

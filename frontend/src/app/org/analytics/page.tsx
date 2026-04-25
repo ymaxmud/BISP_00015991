@@ -32,7 +32,9 @@ const maxWait = Math.max(...waitData.map((d) => d.wait));
 export default function AnalyticsPage() {
   return (
     <div>
-      <h1 className="text-2xl font-bold text-secondary mb-6">Analytics</h1>
+      <div className="pl-12 md:pl-0 mb-6">
+        <h1 className="text-2xl font-bold text-secondary">Analytics</h1>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <StatCard title="Total This Week" value="135" change="+12%" trend="up" icon={<TrendingUp size={20} />} />

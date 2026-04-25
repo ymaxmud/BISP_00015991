@@ -12,7 +12,9 @@ export default function DoctorProfilePage() {
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-secondary mb-6">Doctor Profile</h1>
+      <div className="pl-12 md:pl-0 mb-6">
+        <h1 className="text-2xl font-bold text-secondary">Doctor Profile</h1>
+      </div>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 space-y-6">
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-full bg-teal-50 flex items-center justify-center"><UserCircle size={40} className="text-primary" /></div>

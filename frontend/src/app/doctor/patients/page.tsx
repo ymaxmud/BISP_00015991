@@ -85,10 +85,12 @@ export default function DoctorPatientsPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold text-secondary mb-1">My Patients</h1>
-      <p className="text-muted mb-6">
-        This list is now pulled from the patient records tied to your accessible appointments.
-      </p>
+      <div className="pl-12 md:pl-0">
+        <h1 className="text-2xl font-bold text-secondary mb-1">My Patients</h1>
+        <p className="text-muted mb-6">
+          This list is now pulled from the patient records tied to your accessible appointments.
+        </p>
+      </div>
 
       <div className="relative mb-6">
         <Search

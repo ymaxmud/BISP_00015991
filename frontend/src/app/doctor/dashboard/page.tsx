@@ -104,7 +104,7 @@ export default function DoctorDashboardPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
+      <div className="pl-12 md:pl-0">
         <h1 className="text-2xl font-bold text-foreground">
           Welcome back, Dr. Karimov
         </h1>

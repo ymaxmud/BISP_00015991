@@ -82,7 +82,7 @@ export default function OrgDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
+      <div className="pl-12 md:pl-0">
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted mt-1">
           Overview of your clinic operations for today

@@ -22,8 +22,10 @@ export default function DoctorSettingsPage() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold text-secondary mb-1">Settings</h1>
-      <p className="text-muted mb-6">Manage your preferences and account settings</p>
+      <div className="pl-12 md:pl-0">
+        <h1 className="text-2xl font-bold text-secondary mb-1">Settings</h1>
+        <p className="text-muted mb-6">Manage your preferences and account settings</p>
+      </div>
 
       <div className="space-y-6">
         {/* Notifications */}

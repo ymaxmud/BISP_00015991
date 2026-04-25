@@ -28,7 +28,9 @@ const bottleneck = doctorQueues.reduce((max, d) => d.patients.length > max.patie
 export default function QueuesPage() {
   return (
     <div>
-      <h1 className="text-2xl font-bold text-secondary mb-6">Queue Monitor</h1>
+      <div className="pl-12 md:pl-0 mb-6">
+        <h1 className="text-2xl font-bold text-secondary">Queue Monitor</h1>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">

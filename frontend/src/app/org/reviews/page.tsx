@@ -22,7 +22,9 @@ const doctorAvgs = [
 export default function OrgReviewsPage() {
   return (
     <div>
-      <h1 className="text-2xl font-bold text-secondary mb-6">Reviews</h1>
+      <div className="pl-12 md:pl-0 mb-6">
+        <h1 className="text-2xl font-bold text-secondary">Reviews</h1>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         {doctorAvgs.map((d) => (
