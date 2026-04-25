@@ -287,7 +287,8 @@ export default function DoctorsPage() {
               <p className="text-muted">Loading doctors…</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,360px)] gap-6">
+              <div className="space-y-4">
               {filtered.map((doctor) => {
                 const names = specialtyNames(doctor);
                 const clinicName =
@@ -383,9 +384,9 @@ export default function DoctorsPage() {
                                 href={`/doctors/${slug}`}
                                 className={`block text-center rounded-md py-2 px-1 text-xs leading-tight transition-colors ${
                                   isAvailable
-                                    ? "bg-amber-100 hover:bg-amber-200 text-secondary"
+                                    ? "bg-teal-50 hover:bg-teal-100 text-secondary border border-teal-100"
                                     : "bg-gray-100 text-gray-400 cursor-not-allowed pointer-events-none"
-                                } ${isToday ? "ring-1 ring-primary" : ""}`}
+                                } ${isToday ? "ring-2 ring-primary" : ""}`}
                               >
                                 <div className="text-[11px] text-muted">
                                   {shortDay(cell.date)}
@@ -394,7 +395,11 @@ export default function DoctorsPage() {
                                   {shortMonthDay(cell.date).split(" ")[0]}{" "}
                                   {cell.date.getDate()}
                                 </div>
-                                <div className="mt-2 font-semibold">
+                                <div
+                                  className={`mt-2 font-semibold ${
+                                    isAvailable ? "text-primary" : ""
+                                  }`}
+                                >
                                   {isAvailable
                                     ? `${cell.count} appt${cell.count === 1 ? "" : "s"}`
                                     : "No appts"}
@@ -427,6 +432,36 @@ export default function DoctorsPage() {
                   </p>
                 </div>
               )}
+              </div>
+
+              {/* Map column — sticky on desktop, hidden on mobile */}
+              <aside className="hidden lg:block">
+                <div className="sticky top-6 bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <span className="text-sm font-medium text-foreground">
+                      Map view
+                    </span>
+                    <a
+                      href="https://www.openstreetmap.org/?mlat=41.2995&mlon=69.2401#map=12/41.2995/69.2401"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Expand map
+                    </a>
+                  </div>
+                  <iframe
+                    title="Doctor locations map"
+                    src="https://www.openstreetmap.org/export/embed.html?bbox=69.1500%2C41.2400%2C69.3700%2C41.3700&layer=mapnik&marker=41.2995%2C69.2401"
+                    className="w-full h-[520px] border-0"
+                    loading="lazy"
+                  />
+                  <div className="px-4 py-3 text-xs text-muted">
+                    Showing clinics around Tashkent. Pin shows the central
+                    metro area; individual clinic locations vary.
+                  </div>
+                </div>
+              </aside>
             </div>
           )}
         </section>
