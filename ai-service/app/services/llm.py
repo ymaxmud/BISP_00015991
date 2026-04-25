@@ -15,7 +15,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 _client = None
-_DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+_DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
 
 
 def _get_client():
