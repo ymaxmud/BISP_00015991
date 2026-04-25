@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.utils.text import slugify
 from rest_framework import generics, permissions, serializers, status, viewsets
 from rest_framework.authentication import SessionAuthentication
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
@@ -88,6 +89,34 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         if doctor_profile_id(user) == obj.id:
             return super().update(request, *args, **kwargs)
         raise PermissionDenied('You can only edit your own doctor profile.')
+
+    @action(
+        detail=False,
+        methods=['get', 'patch', 'put'],
+        url_path='me',
+        permission_classes=[permissions.IsAuthenticated],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
+    )
+    def me(self, request):
+        """Return or update the doctor profile that belongs to the current user."""
+        user = request.user
+        own_id = doctor_profile_id(user)
+        if not own_id:
+            return Response(
+                {'detail': 'No doctor profile is linked to this account.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        profile = DoctorProfile.objects.select_related(
+            'user', 'organization'
+        ).prefetch_related('specialties__specialty').get(id=own_id)
+        if request.method == 'GET':
+            return Response(self.get_serializer(profile).data)
+        # PATCH / PUT
+        partial = request.method == 'PATCH'
+        serializer = self.get_serializer(profile, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 # Everything below is for the clinic-admin flow where an organization creates

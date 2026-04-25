@@ -301,6 +301,31 @@ export const doctors = {
   list: (params?: string) =>
     requestList<DoctorRecord>(`${API_BASE}/doctors/${params ? `?${params}` : ""}`),
   get: (slug: string) => request<DoctorRecord>(`${API_BASE}/doctors/${slug}/`),
+  me: () => request<DoctorRecord>(`${API_BASE}/doctors/me/`),
+  updateMe: (data: Record<string, unknown>) =>
+    request<DoctorRecord>(`${API_BASE}/doctors/me/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  uploadAvatar: async (file: File) => {
+    const token = getToken();
+    const fd = new FormData();
+    fd.append("avatar", file);
+    const res = await fetch(`${API_BASE}/doctors/me/`, {
+      method: "PATCH",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    const json = (await res.json().catch(() => ({}))) as ApiRecord;
+    if (!res.ok) {
+      throw new Error(
+        (typeof json.detail === "string" && json.detail) ||
+          JSON.stringify(json) ||
+          res.statusText
+      );
+    }
+    return json as unknown as DoctorRecord;
+  },
   adminAdd: async (data: FormData | Record<string, unknown>) => {
     const token = getToken();
     const headers: Record<string, string> = token
