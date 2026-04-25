@@ -219,7 +219,7 @@ export default function Home() {
               Start Free Trial
             </Link>
             <Link
-              href="#"
+              href="/clinics"
               className="px-8 py-4 border-2 border-white/30 text-white font-semibold rounded-xl hover:bg-white/10 transition-colors"
             >
               Book a Demo
