@@ -1,11 +1,27 @@
 "use client";
 
+/**
+ * The shell for every authenticated screen.
+ *
+ * Two jobs:
+ *   1. Make sure the visitor is allowed to be on the page. Three rules:
+ *        - no token → bounce to /login
+ *        - wrong role for this section → bounce to their own dashboard
+ *        - right role → render the children
+ *   2. Lay out the sidebar + scrollable main area.
+ *
+ * The role check happens client-side because the JWT lives in localStorage,
+ * which we can't read on the server. We render a small "Checking access…"
+ * placeholder while the effect runs so the wrong role can never see even
+ * a flash of the protected content.
+ */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardSidebar from "./DashboardSidebar";
 
 type Role = "patient" | "doctor" | "org";
 
+// Where to send a logged-in user who lands on the wrong section.
 const HOME_FOR: Record<Role, string> = {
   patient: "/patient/dashboard",
   doctor: "/doctor/dashboard",

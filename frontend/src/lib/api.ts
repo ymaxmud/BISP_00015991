@@ -1,6 +1,25 @@
+// =============================================================================
+// API client
+// -----------------------------------------------------------------------------
+// One file, three responsibilities:
+//   1. Type definitions for everything the backend returns (`AuthUser`,
+//      `DoctorRecord`, `AppointmentRecord`, ...).
+//   2. A tiny `request` helper that wraps fetch, attaches the JWT, and
+//      surfaces a readable error message instead of "TypeError: failed to fetch".
+//   3. Feature-grouped exports (`auth`, `doctors`, `appointments`, `ai`, ...)
+//      so pages just do `await doctors.list()` and don't have to remember URLs.
+//
+// Both base URLs default to relative paths so the Next.js proxy routes in
+// `src/app/api/**` can forward them to the Django and FastAPI services. In
+// dev you can override with NEXT_PUBLIC_API_URL / NEXT_PUBLIC_AI_URL if you
+// want to bypass the proxy and hit the services directly.
+// =============================================================================
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 const AI_BASE = process.env.NEXT_PUBLIC_AI_URL || "/api/ai";
 
+// Loose record we use whenever we don't care about the exact shape of a
+// response (e.g. for a generic admin list endpoint that mixes models).
 export type ApiRecord = Record<string, unknown>;
 
 export interface PaginatedResponse<T> {
@@ -198,17 +217,30 @@ export interface ReportUploadRecord {
   analysis: ReportAnalysisRecord;
 }
 
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+// We store the JWT in localStorage on login (see app/login/page.tsx).
+// Returning null on the server is important — Next.js prerenders some
+// pages, and touching localStorage there throws.
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("access_token");
 }
 
+// DRF can return either a plain array or a paginated `{results: [...]}`
+// envelope depending on whether the viewset has pagination on. The list
+// helpers don't want to care, so we normalize both shapes here.
 function unwrapList<T>(data: T[] | PaginatedResponse<T>): T[] {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data.results)) return data.results;
   return [];
 }
 
+// Thin fetch wrapper. Adds the auth header when we have one, and turns
+// any non-2xx response into a thrown Error with the backend's `detail`
+// message so pages can show it directly.
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -239,8 +271,15 @@ async function requestList<T>(
   return unwrapList(data);
 }
 
-// Everything below is grouped by feature area so pages can import one small
-// API helper instead of rebuilding fetch calls each time.
+// ---------------------------------------------------------------------------
+// Feature exports
+// ---------------------------------------------------------------------------
+// Each block below covers one feature area. The shape is always the same:
+// an object with named methods that return Promises. Pages do
+//   `import { doctors } from "@/lib/api"`
+// and call e.g. `doctors.list()` without touching fetch directly.
+
+// auth — login, registration (3 flavors), session refresh, current user.
 export const auth = {
   register: (data: {
     email: string;
@@ -290,13 +329,19 @@ export const auth = {
     ),
 };
 
-// Subscription and billing-related requests.
+// billing — subscription plans (used by /pricing and the registration wizards)
+// and the current user's active subscription.
 export const billing = {
   listPlans: () => requestList<SubscriptionPlanRecord>(`${API_BASE}/billing/plans/`),
   mySubscription: () => request<ApiRecord>(`${API_BASE}/billing/me/`),
 };
 
-// Doctor directory plus admin-only doctor creation.
+// doctors — public directory, the doctor's own profile (`me`), avatar
+// upload (multipart), and the clinic-admin "add doctor" flow.
+//
+// `me` and `updateMe` only work for users whose role is "doctor" — the
+// backend resolves the profile from the JWT, so we never hand the slug
+// around in the URL.
 export const doctors = {
   list: (params?: string) =>
     requestList<DoctorRecord>(`${API_BASE}/doctors/${params ? `?${params}` : ""}`),
@@ -355,7 +400,8 @@ export const doctors = {
   },
 };
 
-// Clinics, hospitals, and related organization data.
+// organizations — clinics and hospitals. Lookup is by slug (not id) so
+// URLs like /clinics/havo-medical-center stay clean.
 export const organizations = {
   list: (params?: string) =>
     requestList<OrganizationRecord>(
@@ -513,8 +559,10 @@ export const analytics = {
   queueStats: () => request<ApiRecord>(`${API_BASE}/analytics/queue/`),
 };
 
-// AI-specific routes are kept in one place so the pages do not need to know
-// the exact endpoint names.
+// ai — every call goes through `/api/ai/*` which is a Next.js proxy route
+// that forwards to the FastAPI service (see src/app/api/ai/[...path]/route.ts).
+// Each method matches one FastAPI endpoint by name; if you add an endpoint
+// over there, mirror it here so the frontend has a typed entry point.
 export const ai = {
   symptomRouting: (data: {
     symptoms: string;

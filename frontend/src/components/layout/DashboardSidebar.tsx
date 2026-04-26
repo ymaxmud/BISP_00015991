@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * Sidebar that the three role-specific dashboards share.
+ *
+ * The same component renders three completely different menus depending
+ * on the `role` prop — keeps the markup, logo, hamburger toggle, and
+ * mobile drawer logic in one place. Each role's nav items live in the
+ * `navItems` map below, so adding a new page = one new line.
+ *
+ * On mobile the sidebar is hidden behind a hamburger button (top-left).
+ * That's why every dashboard page wraps its title in `pl-12 md:pl-0` —
+ * to leave room for the button.
+ */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -9,6 +21,7 @@ import {
   Menu, X, Activity,
 } from "lucide-react";
 
+// Sidebar entries per role. Order here = display order.
 const navItems: Record<string, { label: string; href: string; icon: React.ReactNode }[]> = {
   patient: [
     { label: "Dashboard", href: "/patient/dashboard", icon: <LayoutDashboard size={20} /> },

@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * Top navigation for public pages.
+ *
+ * Sticky and semi-transparent (backdrop blur) so it sits nicely over
+ * the hero image without hiding it. Mobile collapses everything into
+ * a hamburger drawer.
+ *
+ * Add a new public page? Add it to `navLinks` below. The login /
+ * register buttons are rendered separately because they need different
+ * styling from regular nav links.
+ */
 import { useState } from "react";
 import Link from "next/link";
 import { Menu, X, Stethoscope } from "lucide-react";

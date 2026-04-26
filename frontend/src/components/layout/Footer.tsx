@@ -1,5 +1,16 @@
+/**
+ * Site-wide footer for all public pages (landing, doctors directory,
+ * pricing, about, contact, etc). The dashboards don't render this —
+ * they use DashboardLayout instead.
+ *
+ * If you add a new public page, add it to the `footerLinks` map below.
+ * The hrefs are checked at deploy time by the build's static link
+ * collection — broken paths will surface as 404s when crawled.
+ */
 import Link from "next/link";
 
+// Three columns of links. The first column on the rendered page is the
+// brand block (handled separately below); these three are columns 2-4.
 const footerLinks = {
   Platform: [
     { label: "Find a Doctor", href: "/find-doctor" },

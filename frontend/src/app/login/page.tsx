@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * Login page (route: `/login`).
+ *
+ * Two ways to sign in:
+ *   - Email + password → hits Django's /auth/login/ and stores the JWT
+ *   - "Continue with Google" → starts a Supabase OAuth flow, which
+ *     redirects back to /auth/callback to finalize the session.
+ *
+ * After a successful login we either:
+ *   - Honor `?next=/foo` if the visitor was bounced here from a
+ *     protected page (DashboardLayout adds this when not authed), or
+ *   - Send them to the right home for their role (`routeForRole`).
+ *
+ * Why the Suspense boundary: `useSearchParams` requires one in App
+ * Router, otherwise the build fails to prerender. The form lives in
+ * its own `LoginForm` component for that reason.
+ */
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
