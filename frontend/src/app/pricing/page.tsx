@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-import { Check, X, Loader2 } from "lucide-react";
+import { Check, X, Loader2, Sparkles } from "lucide-react";
 import { billing, SubscriptionPlanRecord as ApiPlan } from "@/lib/api";
 
 interface DisplayPlan {
@@ -84,25 +84,6 @@ const FALLBACK_PLANS: DisplayPlan[] = [
   },
 ];
 
-const ENTERPRISE_PLAN: DisplayPlan = {
-  code: "enterprise",
-  name: "Enterprise",
-  description: "For hospitals and multi-branch organizations",
-  price: "Custom",
-  period: "",
-  features: [
-    { text: "Unlimited doctors", included: true },
-    { text: "Multi-department support", included: true },
-    { text: "Full platform access", included: true },
-    { text: "Dedicated support", included: true },
-    { text: "Hospital-grade analytics", included: true },
-    { text: "API access & custom integrations", included: true },
-  ],
-  cta: "Contact Sales",
-  ctaHref: "mailto:sales@avicenna.uz",
-  popular: false,
-};
-
 function apiPlanToDisplay(plan: ApiPlan): DisplayPlan {
   const price = Number(plan.price_monthly);
   const isFree = !price || Number.isNaN(price);
@@ -176,58 +157,67 @@ export default function PricingPage() {
       const sorted = [...active].sort(
         (a, b) => (order[a.code] ?? 99) - (order[b.code] ?? 99)
       );
-      return [...sorted.map(apiPlanToDisplay), ENTERPRISE_PLAN];
+      return sorted.map(apiPlanToDisplay);
     }
-    return [...FALLBACK_PLANS, ENTERPRISE_PLAN];
+    return FALLBACK_PLANS;
   }, [apiPlans]);
 
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
-      <main className="flex-1 py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h1 className="text-4xl font-bold text-secondary mb-4">
-              Plans for Every Doctor & Clinic
+      <main className="flex-1 py-16 sm:py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Hero */}
+          <div className="text-center mb-14">
+            <h1 className="text-3xl sm:text-4xl font-bold text-secondary mb-4">
+              Plans for every doctor &amp; clinic
             </h1>
-            <p className="text-lg text-muted max-w-2xl mx-auto">
-              Start free, upgrade to the Individual plan for the full AI clinical
-              assistant, or scale up to the Clinic plan as you grow.
+            <p className="text-base sm:text-lg text-muted max-w-2xl mx-auto">
+              Start free, upgrade to the Individual plan for the full AI
+              clinical assistant, or scale up to the Clinic plan as you grow.
             </p>
           </div>
 
           {loading && (
-            <div className="text-center mb-6">
+            <div className="text-center mb-6" role="status">
               <Loader2 size={20} className="text-primary animate-spin mx-auto" />
+              <span className="sr-only">Loading plans…</span>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {/* 3 main plans — equal weight, generous spacing */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10 pt-3">
             {plans.map((plan) => (
               <div
                 key={plan.code}
-                className={`bg-white rounded-2xl p-8 border ${
+                className={`relative bg-white rounded-2xl p-7 flex flex-col border transition-shadow ${
                   plan.popular
-                    ? "border-primary shadow-lg ring-2 ring-primary/20 relative"
-                    : "border-gray-100 shadow-sm"
+                    ? "border-primary shadow-lg"
+                    : "border-gray-100 shadow-sm hover:shadow-md"
                 }`}
               >
                 {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-white text-xs font-semibold rounded-full whitespace-nowrap">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-white text-xs font-semibold rounded-full whitespace-nowrap shadow-sm flex items-center gap-1">
+                    <Sparkles size={12} />
                     Most Popular
                   </div>
                 )}
-                <h3 className="text-xl font-bold text-secondary">{plan.name}</h3>
-                <p className="text-sm text-muted mt-1 mb-4 min-h-[2.5rem]">
+
+                <h3 className="text-xl font-bold text-secondary">
+                  {plan.name}
+                </h3>
+                <p className="text-sm text-muted mt-1 mb-5 min-h-[2.5rem]">
                   {plan.description}
                 </p>
+
                 <div className="mb-6">
                   <span className="text-4xl font-bold text-secondary">
                     {plan.price}
                   </span>
                   <span className="text-muted">{plan.period}</span>
                 </div>
-                <ul className="space-y-3 mb-8">
+
+                <ul className="space-y-3 mb-8 flex-1">
                   {plan.features.map((f, idx) => (
                     <li
                       key={`${f.text}-${idx}`}
@@ -236,7 +226,7 @@ export default function PricingPage() {
                       {f.included ? (
                         <Check
                           size={16}
-                          className="text-green-500 flex-shrink-0 mt-0.5"
+                          className="text-primary flex-shrink-0 mt-0.5"
                         />
                       ) : (
                         <X
@@ -254,6 +244,7 @@ export default function PricingPage() {
                     </li>
                   ))}
                 </ul>
+
                 <Link
                   href={plan.ctaHref}
                   className={`block w-full text-center py-3 rounded-lg font-semibold transition-colors ${
@@ -266,6 +257,42 @@ export default function PricingPage() {
                 </Link>
               </div>
             ))}
+          </div>
+
+          {/* Enterprise — separate, wider banner so it's clearly a different
+              tier (custom pricing, sales contact, not a self-serve checkout) */}
+          <div className="bg-gradient-to-r from-secondary via-secondary to-teal-900 text-white rounded-2xl p-8 sm:p-10 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-center shadow-md">
+            <div>
+              <p className="text-xs font-semibold tracking-widest text-teal-200 uppercase mb-2">
+                Enterprise
+              </p>
+              <h3 className="text-2xl sm:text-3xl font-bold mb-2">
+                For hospitals &amp; multi-branch organizations
+              </h3>
+              <p className="text-sm text-gray-300 max-w-xl">
+                Unlimited doctors, multi-department support, hospital-grade
+                analytics, dedicated support, and custom integrations.
+              </p>
+              <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-sm text-gray-200">
+                {[
+                  "Unlimited doctors",
+                  "Multi-department",
+                  "API access",
+                  "Dedicated support",
+                ].map((f) => (
+                  <span key={f} className="inline-flex items-center gap-1.5">
+                    <Check size={14} className="text-teal-300" />
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <a
+              href="mailto:sales@avicenna.uz"
+              className="inline-flex items-center justify-center px-6 py-3 bg-white text-secondary font-semibold rounded-lg hover:bg-gray-100 transition-colors whitespace-nowrap"
+            >
+              Contact Sales
+            </a>
           </div>
 
           <p className="text-center text-xs text-muted mt-10">
