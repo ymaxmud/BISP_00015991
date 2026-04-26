@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Doctor's patient reports (route: `/doctor/reports`).
+ *
+ * Lists lab and imaging reports uploaded by patients that this doctor
+ * has access to (via the appointments they own). Clicking a row goes
+ * to `/doctor/reports/[reportId]` where the AI service runs a report
+ * analysis and the doctor can chat with the report.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import { Brain, Calendar, Eye, FileText, Loader2, User } from "lucide-react";
 import Link from "next/link";

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * Clinic admin queue monitor (route: `/org/queues`).
+ *
+ * Real-time view of all in-progress queues across the clinic. Three
+ * stat cards (total waiting, average wait, urgent flagged) and per-
+ * doctor breakdowns underneath.
+ */
 import { Clock, AlertTriangle, Users } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 

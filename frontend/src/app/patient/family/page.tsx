@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Patient family members (route: `/patient/family`).
+ *
+ * A patient can manage records for dependants (children, elderly
+ * parents) under their own account. This page is the CRUD surface:
+ * add a member, remove with confirmation, see them as initials-avatar
+ * cards.
+ */
 import { useState } from "react";
 import { Plus, X, Trash2, AlertCircle, Heart } from "lucide-react";
 import Button from "@/components/ui/Button";

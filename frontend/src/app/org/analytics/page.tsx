@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * Clinic admin analytics (route: `/org/analytics`).
+ *
+ * Higher-time-horizon view than the dashboard: weekly totals, average
+ * wait trend, busiest specialties, etc. Source for the numbers will
+ * be `analytics.trends()` and `analytics.workload()` from the API.
+ */
 import { BarChart3, TrendingUp, Clock, Users } from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
 

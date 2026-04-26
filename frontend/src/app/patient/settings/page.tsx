@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * Patient settings (route: `/patient/settings`).
+ *
+ * Profile + notification preferences + language. The "language"
+ * picker only stores locally for now; full i18n routing is a
+ * separate piece of work.
+ */
 import { useState } from "react";
 import { Bell, Globe, User, Save } from "lucide-react";
 

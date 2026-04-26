@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Doctor's patient list (route: `/doctor/patients`).
+ *
+ * The set of patients a doctor has seen — derived from the
+ * appointments visible to their account. Filterable by name and
+ * sorted by most recent visit. Click a row to open the slide-out
+ * panel with that patient's history.
+ */
+
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,

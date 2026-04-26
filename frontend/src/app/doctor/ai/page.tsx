@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * Doctor AI assistant (route: `/doctor/ai`).
+ *
+ * Hub for the AI-powered tools available outside of an active
+ * consultation: case analysis, medication safety check, and report
+ * analysis. Each card opens its own form below.
+ *
+ * All requests flow through `ai.*` in `@/lib/api` → Next.js proxy →
+ * FastAPI service. If `OPENAI_API_KEY` isn't set in the AI service
+ * env, responses fall back to deterministic rule-based answers — see
+ * ai-service/app/services/llm.py.
+ */
 import { useMemo, useState } from "react";
 import {
   Brain,

@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Doctor prescriptions (route: `/doctor/prescriptions`).
+ *
+ * Lists prescriptions the logged-in doctor has issued. The "New
+ * Prescription" button is a placeholder for now — the real flow lives
+ * inside `/doctor/consultation/[appointmentId]` because prescriptions
+ * are written during a consultation, not from a blank list.
+ */
+
 import { useState } from "react";
 import { Pill, Search, Plus, Clock, CheckCircle, AlertTriangle } from "lucide-react";
 

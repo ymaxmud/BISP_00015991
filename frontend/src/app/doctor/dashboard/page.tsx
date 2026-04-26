@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * Doctor dashboard (route: `/doctor/dashboard`).
+ *
+ * First page a logged-in doctor sees. Stats row at the top (today's
+ * appointments, waiting patients, pending reports), then upcoming
+ * appointments preview, then a small "AI insights" panel.
+ *
+ * Numbers are placeholder for now — wire them up to the backend's
+ * `analytics.dashboard()` endpoint when the doctor-scoped variant
+ * lands.
+ */
+
 import { useState } from "react";
 import Link from "next/link";
 import {

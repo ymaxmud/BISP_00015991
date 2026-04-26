@@ -1,5 +1,19 @@
 "use client";
 
+/**
+ * Clinic admin settings (route: `/org/settings`).
+ *
+ * Edit the clinic's public info (name, address, city, phone, email)
+ * plus internal preferences (working hours, notification toggles).
+ *
+ * Save flow:
+ *   1. Persist everything to localStorage so non-backend fields
+ *      (hours, notification toggles) survive a reload even if the
+ *      backend only knows about a subset.
+ *   2. PATCH the backend's `organizations.update()` with the fields
+ *      it does support. Errors surface as a red toast next to the
+ *      Save button.
+ */
 import { useEffect, useState } from "react";
 import { Save, Building2, CheckCircle2, AlertCircle } from "lucide-react";
 import { organizations as orgsApi } from "@/lib/api";

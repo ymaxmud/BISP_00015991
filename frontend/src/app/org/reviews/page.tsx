@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Clinic admin reviews (route: `/org/reviews`).
+ *
+ * Aggregated patient reviews across all doctors at the clinic.
+ * Average rating per doctor up top, then the individual review
+ * stream. Read-only — admins don't edit patient reviews, just
+ * monitor them.
+ */
 import { Star } from "lucide-react";
 
 const reviews = [

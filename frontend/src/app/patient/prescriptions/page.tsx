@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Patient prescriptions (route: `/patient/prescriptions`).
+ *
+ * Two tabs: Active vs Completed. Each card shows the medication,
+ * dosage, schedule, and the prescribing doctor. There's no "edit"
+ * action here — patients can only view; doctors create through the
+ * consultation page.
+ */
 import { useState } from "react";
 import { Pill } from "lucide-react";
 import Badge from "@/components/ui/Badge";

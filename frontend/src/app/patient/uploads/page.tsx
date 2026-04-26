@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * Patient uploads (route: `/patient/uploads`).
+ *
+ * Where a patient drops their lab and imaging reports so doctors can
+ * see them. Supports drag-and-drop on the big dotted box and click-
+ * to-browse via a hidden file input. Each upload goes through
+ * `uploads.upload()` which posts a multipart form to Django.
+ *
+ * After upload, files appear in the grid with View / Delete actions
+ * on hover. The "Verified" badge means a doctor has reviewed the
+ * report — the backend sets this, the UI just displays it.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,

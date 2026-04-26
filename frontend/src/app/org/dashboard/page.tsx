@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Clinic admin dashboard (route: `/org/dashboard`).
+ *
+ * Top-line clinic health: today's appointments, active doctors, queue
+ * length, average wait. Below that, charts (Recharts) showing weekly
+ * volume and per-specialty load. Charts render lazily via the
+ * `chartsReady` flag so the static-prerender doesn't choke on canvas.
+ */
 import { useEffect, useState } from "react";
 import {
   Calendar,

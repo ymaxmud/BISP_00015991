@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Clinic admin users (route: `/org/users`).
+ *
+ * Every account on the platform that this admin can see — patients,
+ * doctors, fellow admins. Filter pills at the top split by role.
+ * The Refresh button re-fetches; row clicks open a slide-out detail
+ * panel.
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, ChevronDown, RefreshCw, UserCircle2 } from "lucide-react";
 import Button from "@/components/ui/Button";

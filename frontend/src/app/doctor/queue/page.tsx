@@ -1,5 +1,18 @@
 "use client";
 
+/**
+ * Doctor's smart queue (route: `/doctor/queue`).
+ *
+ * This is the screen a doctor lives on during a clinic day. It shows
+ * the next patient up, the rest of the queue sorted by triage urgency,
+ * and four primary actions: Call Next, Start Consultation, Skip, and
+ * Complete. Skipping a patient drops them to the bottom of the queue
+ * but keeps them in the list.
+ *
+ * State today is local — the real wiring to `queue.list()` /
+ * `queue.update()` and the ticket model in the backend will replace
+ * the in-memory `patients` state when we move past the demo.
+ */
 import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {

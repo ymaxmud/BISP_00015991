@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * Patient dashboard (route: `/patient/dashboard`).
+ *
+ * Landing screen after a patient logs in. Personal greeting (read
+ * from `user_data` in localStorage), upcoming appointments,
+ * reminders, and quick-action cards (Book, Find Doctor, Symptoms).
+ */
 import { useState } from "react";
 import Link from "next/link";
 import {

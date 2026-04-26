@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * Clinic admin doctors management (route: `/org/doctors`).
+ *
+ * Full CRUD over the clinic's doctor roster. The big "Add Doctor"
+ * form on the right hits `doctors.adminAdd()` which both creates a
+ * Django auth user AND a DoctorProfile under this clinic in one
+ * transaction. New doctors are automatically published to the public
+ * directory once is_public flips to true.
+ *
+ * Edit / delete are inline on each row. Specialties are loaded once
+ * on mount and reused across the form's checkboxes.
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,

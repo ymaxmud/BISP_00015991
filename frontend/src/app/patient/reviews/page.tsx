@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * Patient reviews (route: `/patient/reviews`).
+ *
+ * The patient's own reviews of doctors they've seen. Five-star rating
+ * + free-text. Submitting calls `reviews.create()` which writes to
+ * the Django reviews app.
+ */
 import { useState } from "react";
 import { Star } from "lucide-react";
 

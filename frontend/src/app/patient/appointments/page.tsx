@@ -1,5 +1,19 @@
 "use client";
 
+/**
+ * Patient appointments (route: `/patient/appointments`).
+ *
+ * Booking + history page. The "Book New" button opens a modal with
+ * doctor dropdown, date picker, time-slot grid, in-person/video
+ * toggle, and a notes field.
+ *
+ * Tabs at the top split appointments into Upcoming / Past / Cancelled,
+ * with counts updated from the actual data.
+ *
+ * The `?doctor=ID` query param (set when arriving from
+ * /doctors/[slug]) preselects that doctor in the modal so the patient
+ * doesn't have to search again.
+ */
 import { useEffect, useMemo, useState } from "react";
 import {
   Calendar,

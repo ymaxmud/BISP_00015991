@@ -1,5 +1,21 @@
 "use client";
 
+/**
+ * Doctor profile editor (route: `/doctor/profile`).
+ *
+ * Where a logged-in doctor edits the public-facing version of
+ * themselves: name, bio, position, languages, specialties, fee, and
+ * the avatar that shows up on the directory cards.
+ *
+ * Two backend calls:
+ *   - GET  /api/v1/doctors/me/   → load the doctor's own row
+ *   - PATCH /api/v1/doctors/me/  → save edits (multipart for the avatar
+ *                                  upload, JSON for everything else)
+ *
+ * The avatar handler shows a local FileReader preview before the
+ * upload finishes so the UI feels instant; we then replace the
+ * data-URL preview with whatever URL the backend returns.
+ */
 import { useEffect, useRef, useState } from "react";
 import {
   Save,

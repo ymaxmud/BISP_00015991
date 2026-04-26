@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Doctor settings (route: `/doctor/settings`).
+ *
+ * Account-level preferences: notification channels, AI assistance
+ * defaults, language. Lighter than `/doctor/profile` — that page is
+ * about the public-facing identity, this one is private prefs.
+ */
+
 import { useState } from "react";
 import { Bell, Globe, Shield, Save } from "lucide-react";
 

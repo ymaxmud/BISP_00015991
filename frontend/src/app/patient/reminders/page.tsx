@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * Patient reminders (route: `/patient/reminders`).
+ *
+ * Medication and appointment reminders. Toggling a reminder on/off
+ * is a local-only flip for now — real wiring goes to the
+ * `reminders.*` API once we add reminder push delivery.
+ */
 import { useState } from "react";
 import { Check, Pill, Calendar, Clock } from "lucide-react";
 import Badge from "@/components/ui/Badge";

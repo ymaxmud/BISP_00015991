@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * Clinic admin appointments (route: `/org/appointments`).
+ *
+ * Clinic-wide appointment table. Stat cards at top (today, upcoming,
+ * completed, cancelled, no-shows), then a date + search filter row,
+ * status tabs (All / Confirmed / Pending / Completed / Cancelled),
+ * and the table itself.
+ *
+ * Each row's "Actions" dropdown opens above the table; we use a ref
+ * + click-outside listener to close it cleanly.
+ */
 import { useState, useRef, useEffect } from "react";
 import {
   Calendar,
