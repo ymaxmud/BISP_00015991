@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * Public doctor detail page (route: `/doctors/[slug]`).
+ *
+ * Lands here either from the directory grid or the navbar's "Find a
+ * Doctor" search. We pull the doctor record from `doctors.get(slug)`
+ * and render their bio, education, languages, stats, reviews, and a
+ * booking CTA at the bottom.
+ *
+ * The Book Appointment button is auth-aware — see `handleBook`.
+ *   - logged out → /login?next=/doctors/{slug}
+ *   - logged-in patient → /patient/appointments?doctor={id}
+ *   - logged in as doctor / admin → fall back to the patient screen
+ *     (they shouldn't really click this, but we don't want a dead end)
+ *
+ * The reviews are static placeholders for now — backend doesn't
+ * expose per-doctor reviews on the public endpoint yet.
+ */
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

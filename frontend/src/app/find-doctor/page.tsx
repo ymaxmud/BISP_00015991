@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * Symptom Checker (route: `/find-doctor`).
+ *
+ * Public-facing wizard. The visitor types or selects symptoms and we
+ * call the AI service's `symptom-routing` endpoint, which returns a
+ * suggested specialty plus an urgency level and red flags. We then
+ * link them to `/doctors?specialty=...` so they can book.
+ *
+ * The page works without a login — it's intentionally a low-commitment
+ * way to get a first feel for the product.
+ */
 import { useState } from "react";
 import Link from "next/link";
 import {

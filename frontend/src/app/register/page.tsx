@@ -1,8 +1,17 @@
 "use client";
 
+/**
+ * Registration role picker (route: `/register`).
+ *
+ * Three doors: Patient, Doctor, Clinic. Each links to a multi-step
+ * wizard at /register/{role}/. We keep this layer thin on purpose —
+ * the actual form complexity lives inside the wizards.
+ */
 import Link from "next/link";
 import { Activity, Briefcase, Building2, Stethoscope, UserRound } from "lucide-react";
 
+// One card per role. The icons + colors here are also reused inside
+// the wizard pages for visual continuity.
 const roles = [
   {
     href: "/register/patient",

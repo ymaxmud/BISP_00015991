@@ -1,5 +1,22 @@
 "use client";
 
+/**
+ * Pricing page (route: `/pricing`).
+ *
+ * Three self-serve tiers shown side by side, then an Enterprise banner
+ * underneath for sales-led deals.
+ *
+ * Where the data comes from: we fetch `billing.listPlans()` from the
+ * Django backend and merge it with the hardcoded `FALLBACK_PLANS`
+ * constant. The merge always ensures all 3 tiers render, even if the
+ * backend is partially seeded — see the `plans` useMemo for the
+ * exact merge logic.
+ *
+ * Each card's CTA points at the matching registration wizard:
+ *   - free_doctor / individual_doctor → /register/doctor
+ *   - clinic                          → /register/clinic
+ *   - enterprise                      → mailto:sales@avicenna.uz
+ */
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";

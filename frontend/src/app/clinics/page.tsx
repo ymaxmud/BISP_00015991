@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * Public clinics directory (route: `/clinics`).
+ *
+ * Shows verified partner clinics with their address, doctor count, and
+ * rating. The "Book a Demo" CTA on the landing page also points here
+ * for now — it's our closest thing to a "talk to us" page until we
+ * build a real demo-request form.
+ *
+ * The list is currently static demo data because the backend's
+ * `/organizations/` endpoint isn't yet pre-seeded for the demo —
+ * swap in `organizations.list()` from `@/lib/api` when it is.
+ */
 import Link from "next/link";
 import { Star, MapPin, Users, Stethoscope } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";

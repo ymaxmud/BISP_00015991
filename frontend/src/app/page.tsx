@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * Landing page (route: `/`).
+ *
+ * Marketing-only — no API calls, just static content arranged into
+ * sections: hero → "how it works" steps → feature cards → for-providers
+ * pitch → final CTA → footer.
+ *
+ * Each block of content is a small array at the top of the file
+ * (`steps`, `features`, `providerPoints`) so non-developers can edit
+ * the copy without touching JSX.
+ */
 import Link from "next/link";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -9,6 +20,7 @@ import {
   Shield, Star, Activity,
 } from "lucide-react";
 
+// "How it works" — 4 short steps shown as numbered cards in the hero strip.
 const steps = [
   { icon: <ClipboardList size={28} />, title: "Describe Symptoms", desc: "Patients fill a structured intake form before the visit" },
   { icon: <UserCheck size={28} />, title: "Get Matched", desc: "AI suggests the right specialist based on symptoms" },
@@ -16,12 +28,14 @@ const steps = [
   { icon: <HeartPulse size={28} />, title: "Better Care", desc: "Doctors see prepared summaries with AI risk flags" },
 ];
 
+// Three feature cards under the hero. Big icons, short pitch.
 const features = [
   { icon: <FileText size={32} />, title: "Smart Intake", desc: "Patients submit symptoms, history, and medications before arriving. Doctors get structured summaries instead of raw notes." },
   { icon: <BarChart3 size={32} />, title: "Queue Optimization", desc: "Triage-aware queue sorting. Urgent cases get fast-tracked. Clinics see doctor workload in real-time." },
   { icon: <Brain size={32} />, title: "AI Copilot", desc: "Medication safety checks, risk flags, and guideline-based suggestions — all doctor-approved before action." },
 ];
 
+// Bullet list shown in the "for clinics" section. Sales pitch only.
 const providerPoints = [
   "Reduce average wait time by up to 40%",
   "Route patients to the right specialist from the start",

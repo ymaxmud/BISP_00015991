@@ -1,5 +1,25 @@
 "use client";
 
+/**
+ * Public doctors directory (route: `/doctors`).
+ *
+ * Loosely modeled on Zocdoc — each doctor gets a horizontal card with
+ * their name, specialty, rating, distance, and a strip of 7 day-cells
+ * showing how many open slots that day. Clicking a slot (or "More
+ * times") jumps to the detail page where booking happens.
+ *
+ * Data flow:
+ *   - On mount we hit `doctors.list()` (Django) and `specialties.list()`
+ *     in parallel and stash both in state.
+ *   - Search + specialty + visit-mode filters all run client-side in
+ *     a `useMemo`; backend doesn't need to know.
+ *   - Availability numbers are NOT real — see `buildAvailability` for
+ *     the deterministic placeholder until the backend exposes a
+ *     per-doctor calendar feed.
+ *
+ * On `lg+` screens a sticky OpenStreetMap iframe appears in a sidebar
+ * on the right. On smaller viewports it's hidden.
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
