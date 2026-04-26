@@ -147,19 +147,22 @@ export default function PricingPage() {
   }, []);
 
   const plans = useMemo<DisplayPlan[]>(() => {
-    if (apiPlans && apiPlans.length > 0) {
-      const active = apiPlans.filter((p) => p.is_active !== false);
-      const order: Record<string, number> = {
-        free_doctor: 0,
-        individual_doctor: 1,
-        clinic: 2,
-      };
-      const sorted = [...active].sort(
-        (a, b) => (order[a.code] ?? 99) - (order[b.code] ?? 99)
-      );
-      return sorted.map(apiPlanToDisplay);
+    // Always render all three tiers in the marketing page, even if the
+    // backend's /billing/plans/ table is partially seeded — otherwise the
+    // grid renders as a single lonely card.
+    const ORDER = ["free_doctor", "individual_doctor", "clinic"] as const;
+    const apiByCode = new Map<string, ApiPlan>();
+    if (apiPlans) {
+      for (const p of apiPlans) {
+        if (p.is_active !== false) apiByCode.set(p.code, p);
+      }
     }
-    return FALLBACK_PLANS;
+    const fallbackByCode = new Map(FALLBACK_PLANS.map((p) => [p.code, p]));
+    return ORDER.map((code) => {
+      const fromApi = apiByCode.get(code);
+      if (fromApi) return apiPlanToDisplay(fromApi);
+      return fallbackByCode.get(code) ?? FALLBACK_PLANS[0];
+    });
   }, [apiPlans]);
 
   return (
