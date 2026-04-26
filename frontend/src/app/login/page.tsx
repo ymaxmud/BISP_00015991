@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Activity, Loader2 } from "lucide-react";
@@ -31,7 +31,12 @@ function storeSession(data: AuthSession) {
   localStorage.setItem("user_data", JSON.stringify(data.user));
 }
 
-export default function LoginPage() {
+/**
+ * The actual form. Lives in its own component because it reads
+ * `useSearchParams()` — Next.js requires that hook to be inside a
+ * <Suspense> boundary, otherwise prerendering fails at build time.
+ */
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = safeNext(searchParams.get("next"));
@@ -82,6 +87,91 @@ export default function LoginPage() {
   };
 
   return (
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-5"
+    >
+      {error && (
+        <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={handleGoogle}
+        disabled={googleLoading || loading}
+        className="w-full py-2.5 flex items-center justify-center gap-2.5 border border-gray-200 rounded-lg text-sm font-medium text-secondary hover:bg-gray-50 disabled:opacity-50 transition-colors"
+      >
+        {googleLoading ? (
+          <Loader2 className="animate-spin" size={18} />
+        ) : (
+          <GoogleIcon />
+        )}
+        {googleLoading ? "Redirecting..." : "Continue with Google"}
+      </button>
+
+      <div className="flex items-center gap-3 text-xs text-muted">
+        <div className="flex-1 h-px bg-gray-100" />
+        <span>or sign in with email</span>
+        <div className="flex-1 h-px bg-gray-100" />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-secondary mb-1.5">
+          Email
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+          placeholder="you@example.com"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-secondary mb-1.5">
+          Password
+        </label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+          placeholder="••••••••"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={loading || googleLoading}
+        className="w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+      >
+        {loading && <Loader2 className="animate-spin" size={18} />}
+        {loading ? "Signing in..." : "Log In"}
+      </button>
+      <p className="text-center text-sm text-muted">
+        Don&apos;t have an account?{" "}
+        <Link
+          href="/register"
+          className="text-primary font-medium hover:underline"
+        >
+          Sign Up
+        </Link>
+      </p>
+    </form>
+  );
+}
+
+function LoginFormSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex items-center justify-center min-h-[400px]">
+      <Loader2 className="animate-spin text-primary" size={20} />
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
@@ -92,78 +182,9 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-secondary">Welcome back</h1>
           <p className="text-muted mt-1">Sign in to your account</p>
         </div>
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-5"
-        >
-          {error && (
-            <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={handleGoogle}
-            disabled={googleLoading || loading}
-            className="w-full py-2.5 flex items-center justify-center gap-2.5 border border-gray-200 rounded-lg text-sm font-medium text-secondary hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {googleLoading ? (
-              <Loader2 className="animate-spin" size={18} />
-            ) : (
-              <GoogleIcon />
-            )}
-            {googleLoading ? "Redirecting..." : "Continue with Google"}
-          </button>
-
-          <div className="flex items-center gap-3 text-xs text-muted">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span>or sign in with email</span>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-secondary mb-1.5">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-secondary mb-1.5">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-              placeholder="••••••••"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading || googleLoading}
-            className="w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading && <Loader2 className="animate-spin" size={18} />}
-            {loading ? "Signing in..." : "Log In"}
-          </button>
-          <p className="text-center text-sm text-muted">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="text-primary font-medium hover:underline"
-            >
-              Sign Up
-            </Link>
-          </p>
-        </form>
+        <Suspense fallback={<LoginFormSkeleton />}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );
