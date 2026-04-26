@@ -45,32 +45,54 @@ from .serializers import DoctorProfileSerializer
 
 
 class DoctorProfileViewSet(viewsets.ModelViewSet):
+    """
+    Doctor directory + per-doctor self-service.
+
+    Read access is controlled in `get_queryset` so anonymous visitors
+    only see public, active doctors, while clinic admins see their
+    clinic's roster (including unpublished profiles), and a doctor
+    user sees public doctors plus their own row.
+
+    Write access (PATCH/PUT) is enforced in `update`: only the doctor
+    themselves, their clinic admin, or a superadmin can edit a row.
+    """
     queryset = DoctorProfile.objects.select_related(
         'user', 'organization'
     ).prefetch_related('specialties__specialty').all()
     serializer_class = DoctorProfileSerializer
     authentication_classes = [OptionalJWTAuthentication, SessionAuthentication]
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    # POST/DELETE intentionally not allowed — doctors are created via the
+    # "/admin/add" endpoint (clinic admin flow) or self-registration, never
+    # through a generic POST to /doctors/.
     http_method_names = ['get', 'head', 'options', 'patch', 'put']
+    # URL-friendly slug instead of numeric id keeps /doctors/aziz-karimov
+    # readable in the address bar.
     lookup_field = 'public_slug'
     filterset_fields = ['organization', 'is_verified', 'is_active', 'is_public']
     search_fields = ['full_name', 'bio']
     ordering_fields = ['full_name', 'years_experience', 'consultation_fee', 'created_at']
 
     def get_queryset(self):
+        # Visibility rules layered from least to most privileged.
         qs = super().get_queryset()
         user = self.request.user
         if not user.is_authenticated:
+            # Anon: public directory only.
             qs = qs.filter(is_public=True, is_active=True)
         elif is_superadmin(user):
+            # Superadmin sees everything.
             pass
         elif is_org_admin(user):
+            # Clinic admin sees their org's doctors (including unpublished).
             qs = qs.filter(organization_id__in=organization_ids_for_user(user))
         else:
+            # Patients and doctors: public list plus the doctor's own row.
             own_doctor_id = doctor_profile_id(user)
             qs = qs.filter(
                 Q(is_public=True, is_active=True) | Q(id=own_doctor_id)
             )
+        # Optional query-string filters used by the public directory.
         specialty = self.request.query_params.get('specialty')
         if specialty:
             qs = qs.filter(specialties__specialty__slug=specialty)
@@ -80,6 +102,7 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         return qs.distinct()
 
     def update(self, request, *args, **kwargs):
+        # Three paths to write access. We deny by default at the end.
         obj = self.get_object()
         user = request.user
         if is_superadmin(user):
@@ -95,10 +118,17 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         methods=['get', 'patch', 'put'],
         url_path='me',
         permission_classes=[permissions.IsAuthenticated],
+        # Multipart needed for the avatar upload from /doctor/profile.
         parser_classes=[MultiPartParser, FormParser, JSONParser],
     )
     def me(self, request):
-        """Return or update the doctor profile that belongs to the current user."""
+        """Return or update the doctor profile that belongs to the current user.
+
+        The frontend uses this so it doesn't need to know the doctor's
+        slug — it just calls /api/v1/doctors/me/ with the JWT and the
+        backend resolves the rest. Returns 404 if the user has no
+        DoctorProfile linked (e.g. a patient hitting this by mistake).
+        """
         user = request.user
         own_id = doctor_profile_id(user)
         if not own_id:
