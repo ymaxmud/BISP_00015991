@@ -1,5 +1,5 @@
 """
-Thin wrapper around OpenAI.
+Thin wrapper around any OpenAI-compatible chat completions API.
 
 Why this exists: the rest of the AI service should call `chat()`
 without worrying about SDK setup, missing keys, or transient errors.
@@ -8,8 +8,33 @@ we return None on purpose. The caller then falls back to its own
 rule-based logic, so the user still gets *some* answer instead of a
 500.
 
-Model defaults to gpt-3.5-turbo to keep latency and cost low. Override
-with the OPENAI_MODEL env var if you want gpt-4o or anything else.
+The OpenAI Python SDK speaks the same protocol that several free /
+cheaper providers expose (Groq, OpenRouter, Google Gemini's compat
+endpoint, Ollama, ...). To switch providers you only set
+`OPENAI_BASE_URL` and `OPENAI_MODEL` to whatever the provider
+documents — no code changes needed.
+
+Quick presets:
+
+  OpenAI (paid):
+    OPENAI_API_KEY  = sk-...
+    OPENAI_MODEL    = gpt-3.5-turbo
+    OPENAI_BASE_URL = (leave empty)
+
+  Groq (free, fast):
+    OPENAI_API_KEY  = gsk_...
+    OPENAI_MODEL    = llama-3.1-8b-instant       (or llama-3.3-70b-versatile)
+    OPENAI_BASE_URL = https://api.groq.com/openai/v1
+
+  Google Gemini (free tier):
+    OPENAI_API_KEY  = your-gemini-key
+    OPENAI_MODEL    = gemini-1.5-flash
+    OPENAI_BASE_URL = https://generativelanguage.googleapis.com/v1beta/openai/
+
+  OpenRouter (mixed free + paid):
+    OPENAI_API_KEY  = sk-or-...
+    OPENAI_MODEL    = meta-llama/llama-3.1-8b-instruct:free
+    OPENAI_BASE_URL = https://openrouter.ai/api/v1
 """
 from __future__ import annotations
 
@@ -23,10 +48,11 @@ logger = logging.getLogger(__name__)
 # OpenAI SDK is happy to be reused across requests.
 _client = None
 _DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+_BASE_URL = os.getenv("OPENAI_BASE_URL") or None  # None = use OpenAI default
 
 
 def _get_client():
-    """Lazy-init the OpenAI client. Returns None if no API key is set."""
+    """Lazy-init the OpenAI-compatible client. Returns None if no API key is set."""
     global _client
     if _client is not None:
         return _client
@@ -37,10 +63,12 @@ def _get_client():
         return None
     try:
         from openai import OpenAI
-        _client = OpenAI(api_key=api_key)
+        # `base_url=None` makes the SDK use the official OpenAI endpoint;
+        # any other URL points at a compatible provider (Groq, Gemini, ...).
+        _client = OpenAI(api_key=api_key, base_url=_BASE_URL)
         return _client
     except Exception as exc:
-        logger.warning("OpenAI client init failed: %s", exc)
+        logger.warning("LLM client init failed: %s", exc)
         return None
 
 
@@ -87,5 +115,5 @@ def chat(
     except Exception as exc:
         # Don't propagate — log and let the caller fall back. Common
         # causes: rate limit, model downtime, malformed prompt.
-        logger.warning("OpenAI chat call failed: %s", exc)
+        logger.warning("LLM chat call failed: %s", exc)
         return None
