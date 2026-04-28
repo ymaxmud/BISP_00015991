@@ -22,7 +22,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import triage, case_analysis, reports
+from app.routers import triage, case_analysis, reports, assistant
 
 app = FastAPI(
     title="Avicenna AI Service",
@@ -54,6 +54,7 @@ app.add_middleware(
 app.include_router(triage.router, prefix="/api", tags=["Triage"])
 app.include_router(case_analysis.router, prefix="/api", tags=["Case Analysis"])
 app.include_router(reports.router, prefix="/api", tags=["Reports"])
+app.include_router(assistant.router, prefix="/api/assistant", tags=["Assistant"])
 
 
 @app.get("/health")

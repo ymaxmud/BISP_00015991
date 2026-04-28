@@ -564,6 +564,18 @@ export const analytics = {
 // Each method matches one FastAPI endpoint by name; if you add an endpoint
 // over there, mirror it here so the frontend has a typed entry point.
 export const ai = {
+  // Generic clinical Q&A — used by the AI test panel on the doctor dashboard.
+  ask: (data: {
+    question: string;
+    history?: { role: "user" | "assistant"; content: string }[];
+  }) =>
+    request<{ answer: string; used_llm: boolean }>(
+      `${AI_BASE}/assistant/ask`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    ),
   symptomRouting: (data: {
     symptoms: string;
     duration: string;

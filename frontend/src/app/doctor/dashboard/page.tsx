@@ -30,6 +30,7 @@ import StatCard from "@/components/ui/StatCard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
+import AITestPanel from "@/components/ai/AITestPanel";
 
 const queueData = [
   {
@@ -227,6 +228,10 @@ export default function DoctorDashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Live AI assistant — quick way to test or use the model
+          without leaving the dashboard. */}
+      <AITestPanel />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent AI Analyses */}
