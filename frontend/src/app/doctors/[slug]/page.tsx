@@ -36,7 +36,12 @@ import Footer from "@/components/layout/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
-import { doctors as doctorsApi, DoctorRecord } from "@/lib/api";
+import {
+  doctors as doctorsApi,
+  reviews as reviewsApi,
+  DoctorRecord,
+  ReviewRecord,
+} from "@/lib/api";
 
 const AVATAR_COLORS = [
   "bg-teal-500",
@@ -88,31 +93,22 @@ function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
   );
 }
 
-// Static reviews — backend doesn't yet expose per-doctor reviews on the
-// public endpoint, so we render a small set of plausible ones for now.
-const REVIEWS = [
-  {
-    id: 1,
-    author: "Kamola S.",
-    rating: 5,
-    date: "2 weeks ago",
-    text: "Excellent doctor. Very thorough examination and clear explanation of my condition. The doctor took time to answer all my questions and made me feel comfortable throughout the visit.",
-  },
-  {
-    id: 2,
-    author: "Rustam M.",
-    rating: 5,
-    date: "1 month ago",
-    text: "I have been seeing this doctor for 3 years now. Extremely knowledgeable and always up-to-date with the latest treatments. Highly recommended.",
-  },
-  {
-    id: 3,
-    author: "Feruza T.",
-    rating: 4,
-    date: "2 months ago",
-    text: "Professional and caring doctor. The only minor issue was the wait time, but the quality of care was outstanding. Explained everything in detail and gave helpful lifestyle recommendations.",
-  },
-];
+// "X days/weeks/months ago" formatter for review timestamps.
+function relativeDate(iso?: string): string {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diffMs = Date.now() - then;
+  const day = 1000 * 60 * 60 * 24;
+  const days = Math.floor(diffMs / day);
+  if (days < 1) return "today";
+  if (days === 1) return "1 day ago";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} week${days < 14 ? "" : "s"} ago`;
+  if (days < 365)
+    return `${Math.floor(days / 30)} month${days < 60 ? "" : "s"} ago`;
+  return `${Math.floor(days / 365)} year${days < 730 ? "" : "s"} ago`;
+}
 
 export default function DoctorDetailPage({
   params,
@@ -122,6 +118,7 @@ export default function DoctorDetailPage({
   const { slug } = use(params);
   const router = useRouter();
   const [doctor, setDoctor] = useState<DoctorRecord | null>(null);
+  const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,7 +126,16 @@ export default function DoctorDetailPage({
     setLoading(true);
     setError(null);
     try {
-      setDoctor(await doctorsApi.get(slug));
+      const d = await doctorsApi.get(slug);
+      setDoctor(d);
+      // Reviews are nice-to-have — don't fail the whole page if the
+      // reviews endpoint hiccups.
+      try {
+        const list = await reviewsApi.listForDoctor(d.id);
+        setReviews(list);
+      } catch {
+        setReviews([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load doctor");
     } finally {
@@ -206,8 +212,14 @@ export default function DoctorDetailPage({
   const names = specialtyNames(doctor);
   const clinic = doctor.organization_detail?.name ?? "Independent practice";
   const city = doctor.organization_detail?.city ?? "";
-  const rating = 4.6 + ((doctor.id * 13) % 4) / 10;
-  const reviewCount = 5 + ((doctor.id * 7) % 80);
+  // Real review-derived rating + count when we have any, otherwise a
+  // stable placeholder so the page still feels "alive" pre-launch.
+  const rating =
+    reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 4.6 + ((doctor.id * 13) % 4) / 10;
+  const reviewCount =
+    reviews.length > 0 ? reviews.length : 5 + ((doctor.id * 7) % 80);
   const patients = 200 + ((doctor.id * 53) % 4000);
 
   return (
@@ -371,39 +383,60 @@ export default function DoctorDetailPage({
           )}
         </section>
 
-        {/* Reviews */}
+        {/* Reviews — pulled from /api/v1/reviews/?doctor_profile=ID.
+            For anonymous viewers the backend filters to verified-only. */}
         <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
           <Card>
             <CardHeader>
-              <CardTitle>Patient Reviews ({reviewCount})</CardTitle>
+              <CardTitle>
+                Patient Reviews ({reviews.length || 0})
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                {REVIEWS.map((review) => (
-                  <div
-                    key={review.id}
-                    className="pb-6 border-b border-gray-100 last:border-0 last:pb-0"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center text-sm font-medium text-muted">
-                          {review.author[0]}
+              {reviews.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-muted">
+                    No reviews yet for this doctor.
+                  </p>
+                  <p className="text-xs text-muted mt-1">
+                    Be the first to leave one after your visit.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {reviews.map((review) => {
+                    const author = review.patient_first_name || "Anonymous";
+                    return (
+                      <div
+                        key={review.id}
+                        className="pb-6 border-b border-gray-100 last:border-0 last:pb-0"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center text-sm font-medium text-muted">
+                              {author[0]?.toUpperCase() || "A"}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {author}
+                              </p>
+                              <p className="text-xs text-muted">
+                                {relativeDate(review.created_at)}
+                              </p>
+                            </div>
+                          </div>
+                          <StarRating rating={review.rating} size={14} />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {review.author}
+                        {review.comment && (
+                          <p className="text-sm text-muted leading-relaxed">
+                            {review.comment}
                           </p>
-                          <p className="text-xs text-muted">{review.date}</p>
-                        </div>
+                        )}
                       </div>
-                      <StarRating rating={review.rating} size={14} />
-                    </div>
-                    <p className="text-sm text-muted leading-relaxed">
-                      {review.text}
-                    </p>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>

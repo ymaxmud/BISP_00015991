@@ -497,18 +497,40 @@ export const reminders = {
     }),
 };
 
-// Patient review endpoints.
+// reviews — patient-written reviews of doctors. Anonymous visitors only
+// see the verified ones; logged-in users see their own as well.
 export const reviews = {
   list: (params?: string) =>
     request<ApiRecord | PaginatedResponse<ApiRecord>>(
       `${API_BASE}/reviews/${params ? `?${params}` : ""}`
     ),
+  // Convenience: list reviews for one specific doctor.
+  listForDoctor: async (doctorProfileId: number): Promise<ReviewRecord[]> => {
+    const data = await request<ReviewRecord[] | PaginatedResponse<ReviewRecord>>(
+      `${API_BASE}/reviews/?doctor_profile=${doctorProfileId}`
+    );
+    return Array.isArray(data) ? data : (data.results ?? []);
+  },
   create: (data: Record<string, unknown>) =>
     request<ApiRecord>(`${API_BASE}/reviews/`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 };
+
+// Public-facing review record. The patient's full name is intentionally
+// NOT exposed — we get a single-name "patient_first_name" for display.
+export interface ReviewRecord {
+  id: number;
+  patient_profile: number;
+  patient_first_name?: string;
+  doctor_profile: number;
+  appointment?: number | null;
+  rating: number;
+  comment?: string;
+  is_verified?: boolean;
+  created_at?: string;
+}
 
 // File uploads go through the backend because auth and storage rules live there.
 export const uploads = {
