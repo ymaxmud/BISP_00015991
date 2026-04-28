@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
+  Brain,
   CheckCircle2,
   CloudUpload,
   Eye,
@@ -22,12 +23,13 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
-import { UploadRecord, uploads } from "@/lib/api";
+import { ai, ReportAnalysisRecord, UploadRecord, uploads } from "@/lib/api";
 
 const statusConfig: Record<
   string,
@@ -79,7 +81,39 @@ export default function UploadsPage() {
   const [dragActive, setDragActive] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewFile, setViewFile] = useState<UploadRecord | null>(null);
+  // Live AI analysis state for the file currently open in the View modal.
+  const [analysis, setAnalysis] = useState<ReportAnalysisRecord | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset the AI analysis when a different file is opened, otherwise the
+  // user could see stale findings from the previous report.
+  useEffect(() => {
+    setAnalysis(null);
+    setAnalyzeError(null);
+  }, [viewFile?.id]);
+
+  const runAnalysis = useCallback(async () => {
+    if (!viewFile) return;
+    setAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      // The backend's OCR/extraction already populated `extracted_text`
+      // when the file was uploaded — we just hand that to the AI service.
+      const text =
+        viewFile.extracted_text ||
+        `Filename: ${viewFile.file_name}. (No extracted text was available.)`;
+      const result = await ai.reportAnalysis({ report_text: text });
+      setAnalysis(result);
+    } catch (err) {
+      setAnalyzeError(
+        err instanceof Error ? err.message : "Could not analyze report."
+      );
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [viewFile]);
 
   const loadFiles = useCallback(async () => {
     try {
@@ -402,6 +436,112 @@ export default function UploadsPage() {
                       : "Not linked"}
                   </p>
                 </div>
+              </div>
+
+              {/* AI Analysis section — fetched on demand so we don't burn
+                  quota on every modal open. */}
+              <div className="pt-4 border-t border-gray-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <Brain size={16} className="text-primary" />
+                  <h3 className="font-semibold text-foreground text-sm">
+                    AI Analysis
+                  </h3>
+                </div>
+
+                {analysis ? (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs font-medium text-muted uppercase tracking-wider mb-1">
+                        Summary
+                      </p>
+                      <p className="text-sm text-foreground leading-relaxed">
+                        {analysis.summary}
+                      </p>
+                    </div>
+
+                    {analysis.abnormal_values && analysis.abnormal_values.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-muted uppercase tracking-wider mb-1">
+                          Flagged values
+                        </p>
+                        <ul className="space-y-1">
+                          {analysis.abnormal_values.map((v, i) => (
+                            <li
+                              key={i}
+                              className="text-sm flex items-start gap-2"
+                            >
+                              <AlertCircle
+                                size={13}
+                                className="text-amber-500 shrink-0 mt-0.5"
+                              />
+                              <span>
+                                <span className="font-medium text-foreground">
+                                  {v.parameter}
+                                </span>
+                                {": "}
+                                {v.value}
+                                {v.unit ? ` ${v.unit}` : ""}{" "}
+                                <span className="text-muted">
+                                  ({v.status}
+                                  {v.reference_range
+                                    ? `, ref ${v.reference_range}`
+                                    : ""}
+                                  )
+                                </span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {analysis.recommendations && analysis.recommendations.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-muted uppercase tracking-wider mb-1">
+                          Recommendations
+                        </p>
+                        <ul className="space-y-1">
+                          {analysis.recommendations.map((r, i) => (
+                            <li
+                              key={i}
+                              className="text-sm flex items-start gap-2 text-foreground"
+                            >
+                              <CheckCircle2
+                                size={13}
+                                className="text-primary shrink-0 mt-0.5"
+                              />
+                              <span>{r}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : analyzeError ? (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                    <AlertCircle size={14} />
+                    {analyzeError}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={runAnalysis}
+                    disabled={analyzing}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-50 text-primary border border-teal-100 rounded-lg text-sm font-medium hover:bg-teal-100 transition-colors disabled:opacity-60"
+                  >
+                    {analyzing ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Analyzing report…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} />
+                        Get AI insights
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
