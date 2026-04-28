@@ -21,8 +21,9 @@
  * On `lg+` screens a sticky OpenStreetMap iframe appears in a sidebar
  * on the right. On smaller viewports it's hidden.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   Star,
@@ -32,6 +33,7 @@ import {
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  X,
 } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -173,14 +175,25 @@ function StarRating({ rating, reviews }: { rating: number; reviews: number }) {
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
-export default function DoctorsPage() {
+// Inner component because we use `useSearchParams` — App Router requires
+// it to be inside a <Suspense> boundary (otherwise prerendering fails
+// the same way it did on /login).
+function DoctorsPageInner() {
+  const searchParams = useSearchParams();
+  // Pre-filters seeded from the URL: /doctors?specialty=Cardiology or
+  // /doctors?clinic=avicenna-clinic, set when arriving from the symptom
+  // checker or the clinics page.
+  const initialSpecialty = searchParams.get("specialty") ?? "";
+  const initialClinicSlug = searchParams.get("clinic") ?? "";
+
   const [doctors, setDoctors] = useState<ApiDoctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [specialtyList, setSpecialtyList] = useState<ApiSpecialty[]>([]);
 
   const [search, setSearch] = useState("");
-  const [specialty, setSpecialty] = useState("");
+  const [specialty, setSpecialty] = useState(initialSpecialty);
+  const [clinicSlug, setClinicSlug] = useState(initialClinicSlug);
   const [visitMode, setVisitMode] = useState<"all" | "in-person" | "video">(
     "all"
   );
@@ -217,6 +230,19 @@ export default function DoctorsPage() {
     return base;
   }, [specialtyList]);
 
+  // Resolve the clinic slug (from the URL) to the actual clinic name
+  // shown in the active-filter pill, by peeking at the first matching
+  // doctor's organization_detail.
+  const activeClinicName = useMemo(() => {
+    if (!clinicSlug) return null;
+    for (const d of doctors) {
+      if (d.organization_detail?.slug === clinicSlug) {
+        return d.organization_detail.name;
+      }
+    }
+    return clinicSlug;
+  }, [clinicSlug, doctors]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return doctors.filter((doc) => {
@@ -226,13 +252,15 @@ export default function DoctorsPage() {
         doc.full_name.toLowerCase().includes(term) ||
         names.some((n) => n.toLowerCase().includes(term));
       const matchesSpecialty = !specialty || names.includes(specialty);
+      const matchesClinic =
+        !clinicSlug || doc.organization_detail?.slug === clinicSlug;
       const matchesMode =
         visitMode === "all" ||
         (visitMode === "video" && (doc.ai_enabled ?? true)) ||
         visitMode === "in-person";
-      return matchesSearch && matchesSpecialty && matchesMode;
+      return matchesSearch && matchesSpecialty && matchesClinic && matchesMode;
     });
-  }, [doctors, search, specialty, visitMode]);
+  }, [doctors, search, specialty, clinicSlug, visitMode]);
 
   // The first day of the visible week
   const weekStart = useMemo(() => {
@@ -281,7 +309,7 @@ export default function DoctorsPage() {
               />
             </div>
 
-            {/* Quick filter chips */}
+            {/* Quick filter chips + active-URL-filter pills */}
             <div className="flex flex-wrap items-center gap-2 mt-4">
               {(["all", "in-person", "video"] as const).map((mode) => (
                 <button
@@ -301,6 +329,28 @@ export default function DoctorsPage() {
                       : "Video"}
                 </button>
               ))}
+
+              {/* Pre-applied filter from query string — show as a removable pill */}
+              {specialty && (
+                <button
+                  type="button"
+                  onClick={() => setSpecialty("")}
+                  className="px-3 py-1.5 rounded-full text-sm border border-teal-200 bg-teal-50 text-primary inline-flex items-center gap-1.5 hover:bg-teal-100"
+                >
+                  Specialty: {specialty}
+                  <X size={13} />
+                </button>
+              )}
+              {clinicSlug && (
+                <button
+                  type="button"
+                  onClick={() => setClinicSlug("")}
+                  className="px-3 py-1.5 rounded-full text-sm border border-teal-200 bg-teal-50 text-primary inline-flex items-center gap-1.5 hover:bg-teal-100"
+                >
+                  Clinic: {activeClinicName ?? clinicSlug}
+                  <X size={13} />
+                </button>
+              )}
             </div>
           </div>
         </section>
@@ -533,5 +583,22 @@ export default function DoctorsPage() {
 
       <Footer />
     </div>
+  );
+}
+
+// Lightweight skeleton shown while Suspense waits for the search params.
+function DoctorsPageSkeleton() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <Loader2 size={28} className="text-primary animate-spin" />
+    </div>
+  );
+}
+
+export default function DoctorsPage() {
+  return (
+    <Suspense fallback={<DoctorsPageSkeleton />}>
+      <DoctorsPageInner />
+    </Suspense>
   );
 }

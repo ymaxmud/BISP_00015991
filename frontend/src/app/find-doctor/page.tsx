@@ -486,7 +486,10 @@ export default function FindDoctorPage() {
 
               {/* Final actions after the recommendation is shown. */}
               <div className="flex flex-col sm:flex-row gap-3">
-                <Link href="/doctors" className="flex-1">
+                <Link
+                  href={`/doctors?specialty=${encodeURIComponent(result.specialty)}`}
+                  className="flex-1"
+                >
                   <Button size="lg" className="w-full">
                     <Stethoscope size={18} />
                     Book with a {result.specialty} Doctor
