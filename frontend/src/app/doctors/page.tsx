@@ -13,9 +13,10 @@
  *     in parallel and stash both in state.
  *   - Search + specialty + visit-mode filters all run client-side in
  *     a `useMemo`; backend doesn't need to know.
- *   - Availability numbers are NOT real — see `buildAvailability` for
- *     the deterministic placeholder until the backend exposes a
- *     per-doctor calendar feed.
+ *   - Availability numbers come from each doctor's actual working_hours
+ *     (see `buildAvailability`). Booked-appointment subtraction is a
+ *     follow-up — the public directory is anonymous and the appointments
+ *     endpoint requires auth.
  *
  * On `lg+` screens a sticky OpenStreetMap iframe appears in a sidebar
  * on the right. On smaller viewports it's hidden.
@@ -82,28 +83,71 @@ function specialtyNames(doctor: ApiDoctor): string[] {
 /* Availability                                                       */
 /* ------------------------------------------------------------------ */
 /**
- * Backend doesn't yet expose per-day appointment counts to the public.
- * To match the Zocdoc layout we generate a deterministic-but-realistic
- * weekly availability map from the doctor's id, so the same card always
- * shows the same numbers between renders.
+ * Compute open slots per day from a doctor's actual working_hours.
+ *
+ * `working_hours` is stored on the backend as a JSON object keyed by
+ * lowercased day-of-week, with each value being a list of [start, end]
+ * "HH:MM" pairs. Example:
+ *   { "mon": ["09:00", "17:00"], "tue": ["09:00", "13:00"] }
+ *
+ * If a doctor hasn't set their hours yet, we fall back to a sensible
+ * default (Mon-Fri 09:00-17:00). For each visible day we compute the
+ * total slot count = work_window_minutes / consultation_duration.
+ *
+ * Note: we don't yet subtract booked appointments — the appointments
+ * endpoint requires auth and the public directory is anonymous. This
+ * still beats the old deterministic-hash placeholder because the
+ * numbers actually reflect each doctor's real schedule.
  */
-function buildAvailability(doctorId: number, fromDate: Date) {
+
+const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+
+const DEFAULT_HOURS: Record<string, [string, string][]> = {
+  mon: [["09:00", "17:00"]],
+  tue: [["09:00", "17:00"]],
+  wed: [["09:00", "17:00"]],
+  thu: [["09:00", "17:00"]],
+  fri: [["09:00", "17:00"]],
+  sat: [],
+  sun: [],
+};
+
+function parseTime(t: string): number {
+  const [h, m] = t.split(":").map((s) => parseInt(s, 10));
+  if (Number.isNaN(h)) return 0;
+  return h * 60 + (Number.isNaN(m) ? 0 : m);
+}
+
+function slotsForDay(
+  hours: [string, string][],
+  durationMinutes: number
+): number {
+  if (!hours || hours.length === 0 || durationMinutes <= 0) return 0;
+  let total = 0;
+  for (const [start, end] of hours) {
+    const window = Math.max(0, parseTime(end) - parseTime(start));
+    total += Math.floor(window / durationMinutes);
+  }
+  return total;
+}
+
+function buildAvailability(doctor: ApiDoctor, fromDate: Date) {
+  // Coerce the JSON blob to the [start, end] tuple shape we expect. Any
+  // weird value falls back to "no hours set" (= 0 slots).
+  const raw = (doctor.working_hours as Record<string, [string, string][]>) || {};
+  const hasAny = Object.values(raw).some(
+    (v) => Array.isArray(v) && v.length > 0
+  );
+  const hours = hasAny ? raw : DEFAULT_HOURS;
+  const duration = doctor.consultation_duration_minutes || 30;
+
   const cells: { date: Date; count: number }[] = [];
   for (let i = 0; i < DAYS_TO_SHOW; i++) {
     const d = new Date(fromDate);
     d.setDate(fromDate.getDate() + i);
-    const day = d.getDay(); // 0 = Sunday
-    // Pseudo-random but stable: seeded by doctor id and date offset
-    const seed = (doctorId * 7919 + d.getDate() * 31 + day) % 100;
-    let count = 0;
-    if (day === 0 || day === 6) {
-      // weekends: light availability
-      count = seed % 3 === 0 ? 1 + (seed % 3) : 0;
-    } else {
-      // weekdays: most have several slots
-      count = seed % 5 === 0 ? 0 : 1 + (seed % 6);
-    }
-    cells.push({ date: d, count });
+    const dayKey = DAY_KEYS[d.getDay()];
+    const dayHours = (hours[dayKey] || []) as [string, string][];
+    cells.push({ date: d, count: slotsForDay(dayHours, duration) });
   }
   return cells;
 }
@@ -315,7 +359,7 @@ export default function DoctorsPage() {
                   doctor.organization_detail?.name ?? "Independent practice";
                 const city = doctor.organization_detail?.city ?? "";
                 const slug = doctor.public_slug || String(doctor.id);
-                const cells = buildAvailability(doctor.id, weekStart);
+                const cells = buildAvailability(doctor, weekStart);
                 const rating = 4.6 + ((doctor.id * 13) % 4) / 10;
                 const reviews = 5 + ((doctor.id * 7) % 80);
                 const distance = (1 + ((doctor.id * 3) % 95)).toFixed(1);
