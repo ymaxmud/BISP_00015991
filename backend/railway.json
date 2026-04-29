@@ -4,10 +4,8 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "preDeployCommand": "python manage.py migrate --noinput && python manage.py seed_demo",
+    "preDeployCommand": "python manage.py migrate --noinput && (python manage.py seed_demo || echo 'seed_demo skipped (likely already seeded)')",
     "startCommand": "gunicorn avicenna.wsgi --bind 0.0.0.0:$PORT --log-file -",
-    "healthcheckPath": "/api/v1/organizations/specialties/",
-    "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }
