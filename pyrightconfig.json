@@ -1,0 +1,33 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.9",
+  "extraPaths": [
+    "backend",
+    "ai-service"
+  ],
+  "include": [
+    "backend",
+    "ai-service"
+  ],
+  "exclude": [
+    "**/.venv",
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.next",
+    "**/migrations",
+    "**/.claude",
+    "frontend"
+  ],
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "none",
+  "reportGeneralTypeIssues": "warning",
+  "reportAttributeAccessIssue": "none",
+  "reportIncompatibleMethodOverride": "none",
+  "reportIncompatibleVariableOverride": "none",
+  "reportArgumentType": "none",
+  "reportCallIssue": "none",
+  "reportAssignmentType": "none",
+  "reportIndexIssue": "none",
+  "reportOptionalMemberAccess": "none"
+}
