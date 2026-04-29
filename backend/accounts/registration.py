@@ -257,12 +257,16 @@ class DoctorRegistrationSerializer(serializers.Serializer):
     workplace_address = serializers.CharField(required=False, allow_blank=True)
 
     # Step 4 — Availability
-    consultation_duration_minutes = serializers.IntegerField(required=False, default=30)
+    # Don't quietly use "30 minutes" here. This value ends up on the doctor's
+    # profile, so it has to be something the doctor actually entered.
+    consultation_duration_minutes = serializers.IntegerField(min_value=5)
     working_hours = serializers.JSONField(required=False, default=dict)
     consultation_fee = serializers.DecimalField(
         max_digits=10, decimal_places=2, required=False, default=0
     )
-    accepts_new_patients = serializers.BooleanField(required=False, default=True)
+    # Start closed for bookings. The doctor can turn this on after their
+    # schedule is ready.
+    accepts_new_patients = serializers.BooleanField(required=False, default=False)
 
     # Step 5 — Public profile
     bio = serializers.CharField(required=False, allow_blank=True)
@@ -342,9 +346,9 @@ class DoctorRegistrationSerializer(serializers.Serializer):
             languages=validated_data.get('languages', []),
             services=validated_data.get('services', []),
             consultation_fee=validated_data.get('consultation_fee', 0),
-            consultation_duration_minutes=validated_data.get('consultation_duration_minutes', 30),
+            consultation_duration_minutes=validated_data['consultation_duration_minutes'],
             working_hours=validated_data.get('working_hours', {}),
-            accepts_new_patients=validated_data.get('accepts_new_patients', True),
+            accepts_new_patients=validated_data.get('accepts_new_patients', False),
             ai_feature_flags=validated_data.get('ai_feature_flags', {}),
             agreed_to_terms=validated_data.get('agreed_to_terms', False),
             public_slug=_unique_slug(full_name, DoctorProfile),
@@ -411,9 +415,9 @@ class ClinicAdminRegistrationSerializer(serializers.Serializer):
 
     # Step 2 — Clinic information
     clinic_name = serializers.CharField()
-    clinic_type = serializers.ChoiceField(
-        choices=Organization.OrgType.choices, default=Organization.OrgType.CLINIC
-    )
+    # Let the admin choose this. A hospital can easily be mislabeled if we pick
+    # the first option for them.
+    clinic_type = serializers.ChoiceField(choices=Organization.OrgType.choices)
     clinic_city = serializers.CharField()
     clinic_address = serializers.CharField(required=False, allow_blank=True)
     clinic_phone = serializers.CharField(required=False, allow_blank=True)
@@ -425,14 +429,16 @@ class ClinicAdminRegistrationSerializer(serializers.Serializer):
     working_hours = serializers.JSONField(required=False, default=dict)
 
     # Step 4 — Doctor management: initial doctor seats
+    # Older clients may still send this list. We keep accepting it, but an email
+    # alone is not enough information to create a useful doctor account.
     initial_doctor_emails = serializers.ListField(
         child=serializers.EmailField(), required=False, default=list
     )
 
     # Step 5 — Subscription
+    # Plan choice belongs to the admin, not to a hidden fallback in the API.
     plan_code = serializers.ChoiceField(
         choices=[SubscriptionPlan.Code.INDIVIDUAL_DOCTOR, SubscriptionPlan.Code.CLINIC],
-        default=SubscriptionPlan.Code.CLINIC,
     )
     payment_card_last4 = serializers.CharField(required=False, allow_blank=True, max_length=4)
 
@@ -520,8 +526,9 @@ class ClinicAdminRegistrationSerializer(serializers.Serializer):
                 card_last4=card_last4,
             )
 
-        # Note: seats for initial doctors are *reserved* but we don't create
-        # doctor profiles yet — clinic admins add them via the admin UI.
+        # Note: seats for initial doctors are reserved only. The admin will add
+        # each doctor later with proper details, instead of us making a
+        # half-empty account from just an email address.
         user._pending_doctor_invites = initial_doctor_emails  # pyright: ignore
         return user
 

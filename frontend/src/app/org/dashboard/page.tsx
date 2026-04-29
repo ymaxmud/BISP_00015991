@@ -3,23 +3,21 @@
 /**
  * Clinic admin dashboard (route: `/org/dashboard`).
  *
- * Top-line clinic health: today's appointments, active doctors, queue
- * length, average wait. Below that, charts (Recharts) showing weekly
- * volume and per-specialty load. Charts render lazily via the
- * `chartsReady` flag so the static-prerender doesn't choke on canvas.
+ * Clinic dashboard.
+ *
+ * A clinic with no activity should look quiet. The numbers and charts below
+ * come from appointments, doctors, and queue tickets.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   Stethoscope,
   Clock,
   UserX,
   AlertTriangle,
-  ChevronRight,
 } from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import Badge from "@/components/ui/Badge";
 import {
   LineChart,
   Line,
@@ -31,105 +29,151 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import {
+  AppointmentRecord,
+  DoctorRecord,
+  QueueTicketRecord,
+  appointments as appointmentsApi,
+  doctors as doctorsApi,
+  queue as queueApi,
+} from "@/lib/api";
 
-const appointmentTrends = [
-  { day: "Mon", appointments: 32 },
-  { day: "Tue", appointments: 28 },
-  { day: "Wed", appointments: 35 },
-  { day: "Thu", appointments: 24 },
-  { day: "Fri", appointments: 40 },
-  { day: "Sat", appointments: 18 },
-  { day: "Sun", appointments: 12 },
-];
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
 
-const doctorWorkload = [
-  { name: "Dr. Karimov", patients: 8 },
-  { name: "Dr. Yusupova", patients: 6 },
-  { name: "Dr. Rakhimov", patients: 5 },
-  { name: "Dr. Sultanova", patients: 7 },
-  { name: "Dr. Mirzaev", patients: 4 },
-  { name: "Dr. Nazarova", patients: 3 },
-];
-
-const flaggedPatients = [
-  {
-    id: 1,
-    name: "Sardor Alimov",
-    reason: "Missed 3 consecutive appointments",
-    urgency: "danger" as const,
-    doctor: "Dr. Karimov",
-  },
-  {
-    id: 2,
-    name: "Nilufar Ergasheva",
-    reason: "Blood pressure readings abnormally high",
-    urgency: "warning" as const,
-    doctor: "Dr. Sultanova",
-  },
-  {
-    id: 3,
-    name: "Timur Khasanov",
-    reason: "Post-surgery follow-up overdue by 5 days",
-    urgency: "danger" as const,
-    doctor: "Dr. Rakhimov",
-  },
-];
+function dayLabel(date: Date): string {
+  return date.toLocaleDateString(undefined, { weekday: "short" });
+}
 
 export default function OrgDashboardPage() {
   const [chartsReady, setChartsReady] = useState(false);
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+  const [doctors, setDoctors] = useState<DoctorRecord[]>([]);
+  const [tickets, setTickets] = useState<QueueTicketRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
+      // Recharts behaves better after the browser has painted once.
       setChartsReady(true);
     });
-
     return () => {
       window.cancelAnimationFrame(frame);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadDashboard() {
+      // Load the three lists this dashboard is built from.
+      setLoading(true);
+      setError("");
+      const [appointmentResult, doctorResult, queueResult] = await Promise.allSettled([
+        appointmentsApi.list(),
+        doctorsApi.list(),
+        queueApi.list(),
+      ]);
+      if (!active) return;
+      if (appointmentResult.status === "fulfilled") setAppointments(appointmentResult.value);
+      if (doctorResult.status === "fulfilled") setDoctors(doctorResult.value);
+      if (queueResult.status === "fulfilled") setTickets(queueResult.value);
+      if ([appointmentResult, doctorResult, queueResult].some((result) => result.status === "rejected")) {
+        setError("Some dashboard data could not be loaded.");
+      }
+      setLoading(false);
+    }
+    void loadDashboard();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Top cards are just simple counts from the loaded lists.
+  const today = new Date();
+  const todayAppointments = appointments.filter((appointment) =>
+    isSameDay(new Date(appointment.appointment_time), today)
+  );
+  const noShowCount = appointments.filter((appointment) => appointment.status === "no_show").length;
+  const noShowRate =
+    appointments.length > 0 ? `${((noShowCount / appointments.length) * 100).toFixed(1)}%` : "0%";
+  const activeQueueTickets = tickets.filter((ticket) => ticket.queue_status !== "done");
+  const avgWait =
+    activeQueueTickets.length > 0
+      ? Math.round(
+          activeQueueTickets.reduce((sum, ticket) => sum + ticket.estimated_wait_minutes, 0) /
+            activeQueueTickets.length
+        )
+      : 0;
+
+  const appointmentTrends = useMemo(() => {
+    // Last seven days, counted from appointments.
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - index));
+      return {
+        day: dayLabel(date),
+        appointments: appointments.filter((appointment) =>
+          isSameDay(new Date(appointment.appointment_time), date)
+        ).length,
+      };
+    });
+  }, [appointments]);
+
+  const doctorWorkload = useMemo(() => {
+    // Count today's appointments per doctor.
+    const counts = new Map<string, number>();
+    todayAppointments.forEach((appointment) => {
+      const name = appointment.doctor_name || `Doctor #${appointment.doctor_profile}`;
+      counts.set(name, (counts.get(name) || 0) + 1);
+    });
+    return Array.from(counts.entries()).map(([name, patients]) => ({ name, patients }));
+  }, [todayAppointments]);
+
+  const urgentTickets = activeQueueTickets.filter((ticket) => ticket.triage_level === "urgent");
 
   return (
     <div className="space-y-8">
       <div className="pl-12 md:pl-0">
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted mt-1">
-          Overview of your clinic operations for today
+          {loading ? "Loading clinic operations..." : "Overview of your clinic operations for today"}
         </p>
+        {error && <p className="text-sm text-amber-600 mt-2">{error}</p>}
       </div>
 
-      {/* Top-line clinic health metrics for a quick daily overview. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Appointments Today"
-          value={24}
-          change="+12% from yesterday"
-          trend="up"
+          title="Appointments Today"
+          value={todayAppointments.length}
+          trend="neutral"
           icon={<Calendar size={22} />}
         />
         <StatCard
           title="Active Doctors"
-          value={6}
-          change="All present"
-          trend="up"
+          value={doctors.filter((doctor) => doctor.is_active !== false).length}
+          trend="neutral"
           icon={<Stethoscope size={22} />}
         />
         <StatCard
           title="Average Wait Time"
-          value="18 min"
-          change="-3 min from last week"
-          trend="down"
+          value={`${avgWait} min`}
+          trend="neutral"
           icon={<Clock size={22} />}
         />
         <StatCard
           title="No-Show Rate"
-          value="8.3%"
-          change="+1.2% from last week"
-          trend="up"
+          value={noShowRate}
+          trend="neutral"
           icon={<UserX size={22} />}
         />
       </div>
 
-      {/* Charts add a little trend detail beyond the headline numbers. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -142,7 +186,7 @@ export default function OrgDashboardPage() {
                   <LineChart data={appointmentTrends}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="day" tick={{ fontSize: 13 }} />
-                    <YAxis tick={{ fontSize: 13 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 13 }} />
                     <Tooltip />
                     <Line
                       type="monotone"
@@ -163,73 +207,70 @@ export default function OrgDashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Doctor Workload</CardTitle>
+            <CardTitle>Doctor Workload Today</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-72">
-              {chartsReady ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={doctorWorkload} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis type="number" tick={{ fontSize: 13 }} />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      width={110}
-                      tick={{ fontSize: 12 }}
-                    />
-                    <Tooltip />
-                    <Bar
-                      dataKey="patients"
-                      fill="#0d9488"
-                      radius={[0, 6, 6, 0]}
-                      barSize={20}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full rounded-lg bg-gray-50 animate-pulse" />
-              )}
-            </div>
+            {doctorWorkload.length === 0 ? (
+              <div className="h-72 flex items-center justify-center text-muted">
+                {/* New or quiet clinic: no workload to chart. */}
+                No doctor workload data for today.
+              </div>
+            ) : (
+              <div className="h-72">
+                {chartsReady ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={doctorWorkload} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 13 }} />
+                      <YAxis dataKey="name" type="category" width={130} tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Bar dataKey="patients" fill="#0d9488" radius={[0, 6, 6, 0]} barSize={20} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full rounded-lg bg-gray-50 animate-pulse" />
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* This section pulls urgent follow-up cases into one obvious place. */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle size={18} className="text-amber-500" />
-              Flagged Patients
-            </CardTitle>
-            <button className="text-sm text-primary hover:underline flex items-center gap-1">
-              View all <ChevronRight size={14} />
-            </button>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle size={18} className="text-amber-500" />
+            Urgent Queue Tickets
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="divide-y divide-gray-100">
-            {flaggedPatients.map((patient) => (
-              <div
-                key={patient.id}
-                className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
-              >
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">
-                    {patient.name}
-                  </p>
-                  <p className="text-xs text-muted">{patient.reason}</p>
+          {urgentTickets.length === 0 ? (
+            <div className="py-8 text-center text-muted">
+              {/* No urgent tickets right now is a good thing. */}
+              No urgent queue tickets right now.
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {urgentTickets.map((ticket) => (
+                <div
+                  key={ticket.id}
+                  className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">
+                      Queue #{ticket.queue_number}
+                    </p>
+                    <p className="text-xs text-muted">
+                      Estimated wait: {ticket.estimated_wait_minutes} min
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
+                    Urgent
+                  </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted">{patient.doctor}</span>
-                  <Badge variant={patient.urgency} size="sm">
-                    {patient.urgency === "danger" ? "Urgent" : "Warning"}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -7,7 +7,7 @@
  * from `user_data` in localStorage), upcoming appointments,
  * reminders, and quick-action cards (Book, Find Doctor, Symptoms).
  */
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -23,42 +23,41 @@ import StatCard from "@/components/ui/StatCard";
 import { Card, CardContent } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
-
-const upcomingAppointments = [
-  {
-    id: "apt-1",
-    doctorName: "Dr. Anvar Karimov",
-    specialty: "General Practitioner",
-    date: "April 8, 2026",
-    time: "09:30 AM",
-    status: "scheduled" as const,
-  },
-  {
-    id: "apt-2",
-    doctorName: "Dr. Nilufar Abdullayeva",
-    specialty: "Dermatologist",
-    date: "April 12, 2026",
-    time: "02:00 PM",
-    status: "scheduled" as const,
-  },
-  {
-    id: "apt-3",
-    doctorName: "Dr. Rustam Toshmatov",
-    specialty: "Cardiologist",
-    date: "April 18, 2026",
-    time: "11:00 AM",
-    status: "scheduled" as const,
-  },
-];
+import {
+  AppointmentRecord,
+  PrescriptionRecord,
+  ReminderRecord,
+  appointments,
+  prescriptions,
+  reminders,
+} from "@/lib/api";
 
 const statusBadge: Record<string, { label: string; variant: "info" | "success" | "danger" | "default" }> = {
   scheduled: { label: "Scheduled", variant: "info" },
+  checked_in: { label: "Checked In", variant: "info" },
+  in_queue: { label: "In Queue", variant: "info" },
+  in_consultation: { label: "In Consultation", variant: "info" },
   completed: { label: "Completed", variant: "success" },
   cancelled: { label: "Cancelled", variant: "danger" },
   no_show: { label: "No Show", variant: "default" },
 };
 
+function dateTimeParts(value: string): { date: string; time: string } {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { date: "Not scheduled", time: "" };
+  return {
+    date: date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+    time: date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
 export default function PatientDashboardPage() {
+  const [appointmentList, setAppointmentList] = useState<AppointmentRecord[]>([]);
+  const [reminderList, setReminderList] = useState<ReminderRecord[]>([]);
+  const [prescriptionList, setPrescriptionList] = useState<PrescriptionRecord[]>([]);
+  const [dashboardNow] = useState(() => Date.now());
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [userName] = useState(() => {
     try {
       const raw = localStorage.getItem("user_data");
@@ -69,48 +68,95 @@ export default function PatientDashboardPage() {
         }
       }
     } catch {}
-    return "Sardor";
+    return "";
   });
+
+  useEffect(() => {
+    let active = true;
+    async function loadDashboard() {
+      // Pull the patient's own data. A new account normally returns empty
+      // lists, and that is exactly what we want to show.
+      setLoading(true);
+      setLoadError("");
+      const [apptResult, reminderResult, prescriptionResult] = await Promise.allSettled([
+        appointments.list(),
+        reminders.list(),
+        prescriptions.list(),
+      ]);
+      if (!active) return;
+      if (apptResult.status === "fulfilled") setAppointmentList(apptResult.value);
+      if (reminderResult.status === "fulfilled") setReminderList(reminderResult.value);
+      if (prescriptionResult.status === "fulfilled") setPrescriptionList(prescriptionResult.value);
+      if ([apptResult, reminderResult, prescriptionResult].some((r) => r.status === "rejected")) {
+        setLoadError("Some dashboard data could not be loaded.");
+      }
+      setLoading(false);
+    }
+    void loadDashboard();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const upcomingAppointments = useMemo(() => {
+    // Only upcoming appointments belong in this small preview.
+    return appointmentList
+      .filter((apt) => {
+        const time = new Date(apt.appointment_time).getTime();
+        return (
+          !Number.isNaN(time) &&
+          time >= dashboardNow &&
+          !["cancelled", "completed", "no_show"].includes(apt.status)
+        );
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.appointment_time).getTime() -
+          new Date(b.appointment_time).getTime()
+      )
+      .slice(0, 3);
+  }, [appointmentList, dashboardNow]);
+
+  const pendingReminderCount = reminderList.filter((r) => r.status === "pending").length;
+  const completedVisitCount = appointmentList.filter((a) => a.status === "completed").length;
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div className="pl-12 md:pl-0">
         <h1 className="text-2xl font-bold text-foreground">
-          Welcome back, {userName}
+          {userName ? `Welcome back, ${userName}` : "Welcome back"}
         </h1>
         <p className="text-muted mt-1">
-          Here is an overview of your health dashboard.
+          {loading ? "Loading your health dashboard..." : "Here is your account overview."}
         </p>
+        {loadError && <p className="text-sm text-amber-600 mt-2">{loadError}</p>}
       </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Upcoming Appointments"
-          value={3}
-          change="+1 this week"
-          trend="up"
+          value={upcomingAppointments.length}
+          trend="neutral"
           icon={<Calendar size={22} />}
         />
         <StatCard
-          title="Active Prescriptions"
-          value={5}
+          title="Prescriptions"
+          value={prescriptionList.length}
           trend="neutral"
           icon={<Pill size={22} />}
         />
         <StatCard
           title="Pending Reminders"
-          value={2}
-          change="2 today"
-          trend="up"
+          value={pendingReminderCount}
+          trend="neutral"
           icon={<Bell size={22} />}
         />
         <StatCard
           title="Completed Visits"
-          value={12}
-          change="+3 this month"
-          trend="up"
+          value={completedVisitCount}
+          trend="neutral"
           icon={<CheckCircle2 size={22} />}
         />
       </div>
@@ -128,17 +174,28 @@ export default function PatientDashboardPage() {
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {!loading && upcomingAppointments.length === 0 && (
+            <Card className="md:col-span-3">
+              <CardContent className="pt-6 text-center text-muted">
+                {/* First-time users should see this, not example appointments. */}
+                No upcoming appointments yet. Book a visit when you are ready.
+              </CardContent>
+            </Card>
+          )}
           {upcomingAppointments.map((apt) => {
-            const badge = statusBadge[apt.status];
+            const badge = statusBadge[apt.status] || statusBadge.scheduled;
+            const when = dateTimeParts(apt.appointment_time);
             return (
               <Card key={apt.id}>
                 <CardContent className="pt-6">
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="font-semibold text-foreground">
-                        {apt.doctorName}
+                        {apt.doctor_name || "Assigned doctor"}
                       </p>
-                      <p className="text-sm text-muted">{apt.specialty}</p>
+                      <p className="text-sm text-muted">
+                        {apt.doctor_specialties?.join(", ") || apt.organization_name || "Appointment"}
+                      </p>
                     </div>
                     <Badge variant={badge.variant} size="sm">
                       {badge.label}
@@ -147,7 +204,7 @@ export default function PatientDashboardPage() {
                   <div className="flex items-center gap-2 text-sm text-muted mt-4">
                     <Clock size={14} />
                     <span>
-                      {apt.date} at {apt.time}
+                      {when.date}{when.time ? ` at ${when.time}` : ""}
                     </span>
                   </div>
                   <div className="mt-4">

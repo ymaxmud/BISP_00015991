@@ -196,8 +196,11 @@ class AdminAddDoctorSerializer(serializers.Serializer):
     consultation_fee = serializers.DecimalField(
         max_digits=10, decimal_places=2, required=False, default=0
     )
-    consultation_duration_minutes = serializers.IntegerField(required=False, default=30)
-    is_public = serializers.BooleanField(required=False, default=True)
+    # The slot length should come from the admin. A quiet "30" here makes the
+    # doctor look ready for bookings when the form was not actually completed.
+    consultation_duration_minutes = serializers.IntegerField(min_value=5)
+    # Keep new profiles private first. Publishing is a separate decision.
+    is_public = serializers.BooleanField(required=False, default=False)
 
 
 class AdminAddDoctorView(generics.CreateAPIView):
@@ -275,9 +278,9 @@ class AdminAddDoctorView(generics.CreateAPIView):
                 working_history=data.get('working_history', []),
                 working_hours=data.get('working_hours', {}),
                 consultation_fee=data.get('consultation_fee', 0),
-                consultation_duration_minutes=data.get('consultation_duration_minutes', 30),
+                consultation_duration_minutes=data['consultation_duration_minutes'],
                 public_slug=_unique_slug(full_name),
-                is_public=data.get('is_public', True),
+                is_public=data.get('is_public', False),
                 is_active=True,
                 ai_enabled=bool(subscription and subscription.ai_enabled),
             )

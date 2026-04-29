@@ -60,31 +60,34 @@ export default function DoctorRegisterPage() {
   const [workplaceAddress, setWorkplaceAddress] = useState("");
 
   // Step 4 — availability
-  const [duration, setDuration] = useState("30");
+  // Keep these blank at first. The example text below is only a hint, not
+  // something we should save for the doctor.
+  const [duration, setDuration] = useState("");
   const [fee, setFee] = useState("");
-  const [acceptsNewPatients, setAcceptsNewPatients] = useState(true);
-  const [workingHoursText, setWorkingHoursText] = useState(
-    "Mon–Fri 09:00-17:00"
-  );
+  const [acceptsNewPatients, setAcceptsNewPatients] = useState(false);
+  const [workingHoursText, setWorkingHoursText] = useState("");
 
   // Step 5 — public profile
+  // Languages are also a choice. If the doctor skips this, leave it blank.
   const [bio, setBio] = useState("");
-  const [languages, setLanguages] = useState<string[]>(["en"]);
+  const [languages, setLanguages] = useState<string[]>([]);
   const [services, setServices] = useState("");
 
   // Step 6 — AI features
+  // AI tools are opt-in.
   const [aiFlags, setAiFlags] = useState<Record<string, boolean>>({
-    case_analysis: true,
-    report_analysis: true,
-    medication_safety: true,
-    intake_summary: true,
+    case_analysis: false,
+    report_analysis: false,
+    medication_safety: false,
+    intake_summary: false,
   });
 
   // Step 7 — verification
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   // Step 8 — subscription
-  const [planCode, setPlanCode] = useState("individual_doctor");
+  // The plan is a signup decision. Make the doctor pick it.
+  const [planCode, setPlanCode] = useState("");
   const [cardLast4, setCardLast4] = useState("");
 
   useEffect(() => {
@@ -113,8 +116,21 @@ export default function DoctorRegisterPage() {
     if (current === 1 && specialtyIds.length === 0) {
       return "Select at least one specialty.";
     }
+    if (current === 3) {
+      // Booking needs a slot length, so this one cannot stay blank.
+      const minutes = Number(duration);
+      if (!duration || Number.isNaN(minutes)) {
+        return "Enter your real consultation duration.";
+      }
+      if (minutes < 5) {
+        return "Consultation duration must be at least 5 minutes.";
+      }
+    }
     if (current === 6 && !agreedToTerms) {
       return "You must agree to the terms to continue.";
+    }
+    if (current === 7 && !planCode) {
+      return "Choose a subscription plan.";
     }
     return null;
   };
@@ -136,10 +152,15 @@ export default function DoctorRegisterPage() {
       setStep(6);
       return;
     }
+    if (!planCode) {
+      setError("Choose a subscription plan.");
+      setStep(7);
+      return;
+    }
     setError("");
     setLoading(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         first_name: firstName,
         last_name: lastName,
         email,
@@ -154,9 +175,7 @@ export default function DoctorRegisterPage() {
         workplace_name: workplaceName,
         workplace_city: workplaceCity,
         workplace_address: workplaceAddress,
-        consultation_duration_minutes: parseInt(duration || "30", 10),
-        consultation_fee: fee ? parseFloat(fee) : 0,
-        working_hours: { text: workingHoursText },
+        consultation_duration_minutes: parseInt(duration, 10),
         accepts_new_patients: acceptsNewPatients,
         bio,
         languages,
@@ -169,6 +188,11 @@ export default function DoctorRegisterPage() {
         plan_code: planCode,
         payment_card_last4: cardLast4.slice(-4),
       };
+      // If an optional field is empty, do not send it.
+      if (fee) payload.consultation_fee = parseFloat(fee);
+      if (workingHoursText.trim()) {
+        payload.working_hours = { text: workingHoursText.trim() };
+      }
       const data = await auth.registerDoctor(payload);
       localStorage.setItem("access_token", data.access);
       localStorage.setItem("refresh_token", data.refresh);

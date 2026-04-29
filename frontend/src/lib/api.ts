@@ -137,6 +137,41 @@ export interface UploadRecord {
   uploaded_at: string;
 }
 
+// These are the shapes the dashboard pages read from the API.
+export interface PrescriptionRecord {
+  id: number;
+  encounter: number;
+  medication_name: string;
+  dosage: string;
+  schedule: string;
+  duration_days: number;
+  notes?: string;
+  source?: string;
+  created_at?: string;
+}
+
+export interface ReminderRecord {
+  id: number;
+  patient_profile: number;
+  prescription?: number | null;
+  title: string;
+  reminder_type: string;
+  scheduled_time: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface QueueTicketRecord {
+  id: number;
+  appointment: number;
+  queue_number: number;
+  triage_level: string;
+  queue_status: string;
+  estimated_wait_minutes: number;
+  assigned_at?: string;
+  updated_at?: string;
+}
+
 export interface PatientMedicalHistoryRecord {
   chronic_conditions?: string;
   allergies?: string;
@@ -432,6 +467,8 @@ export const patients = {
 export const appointments = {
   list: (params?: string) =>
     requestList<AppointmentRecord>(`${API_BASE}/appointments/${params ? `?${params}` : ""}`),
+  // Used by the consultation page to open the exact appointment from the URL.
+  get: (id: number) => request<AppointmentRecord>(`${API_BASE}/appointments/${id}/`),
   create: (data: Record<string, unknown>) =>
     request<AppointmentRecord>(`${API_BASE}/appointments/`, {
       method: "POST",
@@ -459,9 +496,9 @@ export const intake = {
 
 // Queue board endpoints for clinic workflow.
 export const queue = {
-  list: () => requestList<ApiRecord>(`${API_BASE}/queue/tickets/`),
+  list: () => requestList<QueueTicketRecord>(`${API_BASE}/queue/tickets/`),
   update: (id: number, data: Record<string, unknown>) =>
-    request<ApiRecord>(`${API_BASE}/queue/tickets/${id}/`, {
+    request<QueueTicketRecord>(`${API_BASE}/queue/tickets/${id}/`, {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
@@ -479,9 +516,9 @@ export const encounters = {
 
 // Prescription creation and listing.
 export const prescriptions = {
-  list: () => requestList<ApiRecord>(`${API_BASE}/prescriptions/`),
+  list: () => requestList<PrescriptionRecord>(`${API_BASE}/prescriptions/`),
   create: (data: Record<string, unknown>) =>
-    request<ApiRecord>(`${API_BASE}/prescriptions/`, {
+    request<PrescriptionRecord>(`${API_BASE}/prescriptions/`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -489,10 +526,16 @@ export const prescriptions = {
 
 // Reminder management.
 export const reminders = {
-  list: () => requestList<ApiRecord>(`${API_BASE}/reminders/`),
+  list: () => requestList<ReminderRecord>(`${API_BASE}/reminders/`),
   create: (data: Record<string, unknown>) =>
-    request<ApiRecord>(`${API_BASE}/reminders/`, {
+    request<ReminderRecord>(`${API_BASE}/reminders/`, {
       method: "POST",
+      body: JSON.stringify(data),
+    }),
+  // Patient reminders use this when the user marks one as done.
+  update: (id: number, data: Record<string, unknown>) =>
+    request<ReminderRecord>(`${API_BASE}/reminders/${id}/`, {
+      method: "PATCH",
       body: JSON.stringify(data),
     }),
 };
@@ -512,7 +555,7 @@ export const reviews = {
     return Array.isArray(data) ? data : (data.results ?? []);
   },
   create: (data: Record<string, unknown>) =>
-    request<ApiRecord>(`${API_BASE}/reviews/`, {
+    request<ReviewRecord>(`${API_BASE}/reviews/`, {
       method: "POST",
       body: JSON.stringify(data),
     }),

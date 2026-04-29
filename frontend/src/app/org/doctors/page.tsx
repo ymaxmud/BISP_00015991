@@ -107,6 +107,8 @@ interface NewDoctorForm {
   avatar: File | null;
 }
 
+// Start with a clean form. Anything patients can see should be typed by the
+// clinic admin, not filled by us behind the scenes.
 const EMPTY_FORM: NewDoctorForm = {
   first_name: "",
   last_name: "",
@@ -114,17 +116,18 @@ const EMPTY_FORM: NewDoctorForm = {
   phone: "",
   gender: "",
   position: "",
-  years_experience: "0",
+  years_experience: "",
   education: "",
   license_number: "",
   bio: "",
   specialty_ids: [],
   languages: "",
   services: "",
-  consultation_fee: "0",
-  consultation_duration_minutes: "30",
+  consultation_fee: "",
+  consultation_duration_minutes: "",
   working_history: [{ position: "", organization: "", start_year: "", end_year: "" }],
-  is_public: true,
+  // Keep the profile hidden until the admin is ready to publish it.
+  is_public: false,
   avatar: null,
 };
 
@@ -438,6 +441,17 @@ export default function OrgDoctorsPage() {
         setSaveError("First name, last name, and email are required.");
         return;
       }
+      // Booking needs a slot length. If this is empty, we stop here instead of
+      // slipping in a default.
+      const duration = Number(form.consultation_duration_minutes);
+      if (!form.consultation_duration_minutes || Number.isNaN(duration)) {
+        setSaveError("Enter the doctor's real consultation slot duration.");
+        return;
+      }
+      if (duration < 5) {
+        setSaveError("Slot duration must be at least 5 minutes.");
+        return;
+      }
 
       setSaving(true);
       try {
@@ -462,7 +476,10 @@ export default function OrgDoctorsPage() {
         if (form.gender) fd.append("gender", form.gender);
         if (form.position.trim()) fd.append("position", form.position.trim());
         if (form.bio.trim()) fd.append("bio", form.bio.trim());
-        fd.append("years_experience", form.years_experience || "0");
+        // Do not send optional blanks. If the admin left it empty, the profile
+        // should stay empty too.
+        if (form.years_experience)
+          fd.append("years_experience", form.years_experience);
         if (form.education.trim()) fd.append("education", form.education.trim());
         if (form.license_number.trim())
           fd.append("license_number", form.license_number.trim());
@@ -471,12 +488,11 @@ export default function OrgDoctorsPage() {
         );
         languages.forEach((l) => fd.append("languages", l));
         services.forEach((s) => fd.append("services", s));
-        fd.append("working_history", JSON.stringify(cleanHistory));
-        fd.append("consultation_fee", form.consultation_fee || "0");
-        fd.append(
-          "consultation_duration_minutes",
-          form.consultation_duration_minutes || "30"
-        );
+        if (cleanHistory.length > 0)
+          fd.append("working_history", JSON.stringify(cleanHistory));
+        if (form.consultation_fee)
+          fd.append("consultation_fee", form.consultation_fee);
+        fd.append("consultation_duration_minutes", form.consultation_duration_minutes);
         fd.append("is_public", form.is_public ? "true" : "false");
         if (form.avatar) fd.append("avatar", form.avatar);
 

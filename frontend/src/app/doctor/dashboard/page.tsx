@@ -3,16 +3,12 @@
 /**
  * Doctor dashboard (route: `/doctor/dashboard`).
  *
- * First page a logged-in doctor sees. Stats row at the top (today's
- * appointments, waiting patients, pending reports), then upcoming
- * appointments preview, then a small "AI insights" panel.
+ * Doctor dashboard.
  *
- * Numbers are placeholder for now — wire them up to the backend's
- * `analytics.dashboard()` endpoint when the doctor-scoped variant
- * lands.
+ * Everything here comes from the doctor's account. If the account is fresh,
+ * this page should simply be quiet.
  */
-
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -31,49 +27,12 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import AITestPanel from "@/components/ai/AITestPanel";
-
-const queueData = [
-  {
-    id: 1,
-    name: "Aziza Rahimova",
-    complaint: "Persistent headache, 3 days",
-    triage: "normal" as const,
-    waitTime: "12 min",
-    status: "waiting",
-  },
-  {
-    id: 2,
-    name: "Sardor Alimov",
-    complaint: "Chest tightness, shortness of breath",
-    triage: "urgent" as const,
-    waitTime: "3 min",
-    status: "waiting",
-  },
-  {
-    id: 3,
-    name: "Nilufar Karimova",
-    complaint: "Follow-up: diabetes management",
-    triage: "normal" as const,
-    waitTime: "22 min",
-    status: "waiting",
-  },
-  {
-    id: 4,
-    name: "Bobur Toshmatov",
-    complaint: "Knee pain after injury",
-    triage: "priority" as const,
-    waitTime: "8 min",
-    status: "waiting",
-  },
-  {
-    id: 5,
-    name: "Madina Yusupova",
-    complaint: "Recurring abdominal pain",
-    triage: "priority" as const,
-    waitTime: "15 min",
-    status: "waiting",
-  },
-];
+import {
+  AppointmentRecord,
+  QueueTicketRecord,
+  appointments as appointmentsApi,
+  queue as queueApi,
+} from "@/lib/api";
 
 const triageBadge: Record<string, { variant: "default" | "warning" | "danger"; label: string }> = {
   normal: { variant: "default", label: "Normal" },
@@ -81,84 +40,121 @@ const triageBadge: Record<string, { variant: "default" | "warning" | "danger"; l
   urgent: { variant: "danger", label: "Urgent" },
 };
 
-const recentAnalyses = [
-  {
-    id: "a1",
-    patientName: "Rustam Umarov",
-    summary: "AI flagged potential drug interaction between Metformin and newly prescribed Ciprofloxacin.",
-    riskLevel: "warning",
-    time: "25 min ago",
-  },
-  {
-    id: "a2",
-    patientName: "Gulnora Sharipova",
-    summary: "Lab results suggest early-stage thyroid dysfunction. TSH levels elevated at 8.2 mIU/L.",
-    riskLevel: "info",
-    time: "1 hr ago",
-  },
-  {
-    id: "a3",
-    patientName: "Sardor Alimov",
-    summary: "Symptom pattern consistent with possible cardiac involvement. ECG recommended urgently.",
-    riskLevel: "danger",
-    time: "5 min ago",
-  },
-];
-
-const riskBadgeVariant: Record<string, "warning" | "info" | "danger"> = {
-  warning: "warning",
-  info: "info",
-  danger: "danger",
+const statusLabel: Record<string, string> = {
+  waiting: "Waiting",
+  called: "Called",
+  in_progress: "In Consultation",
+  done: "Done",
 };
 
+function isToday(value: string): boolean {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
+
 export default function DoctorDashboardPage() {
-  const [queue] = useState(queueData);
+  const [appointmentList, setAppointmentList] = useState<AppointmentRecord[]>([]);
+  const [tickets, setTickets] = useState<QueueTicketRecord[]>([]);
+  const [doctorName] = useState(() => {
+    // This is just for the greeting. Medical/clinic data still comes from APIs.
+    try {
+      if (typeof window === "undefined") return "";
+      const raw = localStorage.getItem("user_data");
+      if (!raw) return "";
+      const user = JSON.parse(raw) as { first_name?: string; last_name?: string };
+      return [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+    } catch {
+      return "";
+    }
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function loadDashboard() {
+      // Load the two lists this page needs. Empty results mean zero cards.
+      setLoading(true);
+      setError("");
+      const [appointmentResult, queueResult] = await Promise.allSettled([
+        appointmentsApi.list(),
+        queueApi.list(),
+      ]);
+      if (!active) return;
+      if (appointmentResult.status === "fulfilled") setAppointmentList(appointmentResult.value);
+      if (queueResult.status === "fulfilled") setTickets(queueResult.value);
+      if (appointmentResult.status === "rejected" || queueResult.status === "rejected") {
+        setError("Some dashboard data could not be loaded.");
+      }
+      setLoading(false);
+    }
+    void loadDashboard();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const appointmentById = useMemo(() => {
+    // Queue tickets point to appointments, so keep a quick lookup for names and reasons.
+    return new Map(appointmentList.map((appointment) => [appointment.id, appointment]));
+  }, [appointmentList]);
+
+  // Summary cards are calculated from the loaded lists above.
+  const activeTickets = tickets.filter((ticket) => ticket.queue_status !== "done");
+  const waitingTickets = tickets.filter((ticket) => ticket.queue_status === "waiting");
+  const urgentCount = activeTickets.filter((ticket) => ticket.triage_level === "urgent").length;
+  const todayAppointments = appointmentList.filter((appointment) =>
+    isToday(appointment.appointment_time)
+  );
+  const completedToday = todayAppointments.filter(
+    (appointment) => appointment.status === "completed"
+  ).length;
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="pl-12 md:pl-0">
         <h1 className="text-2xl font-bold text-foreground">
-          Welcome back, Dr. Karimov
+          {doctorName ? `Welcome back, Dr. ${doctorName}` : "Welcome back"}
         </h1>
         <p className="text-muted mt-1">
-          Here is your overview for today. You have patients waiting.
+          {loading ? "Loading your dashboard..." : "Here is your overview for today."}
         </p>
+        {error && <p className="text-sm text-amber-600 mt-2">{error}</p>}
       </div>
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Today's Appointments"
-          value={8}
-          change="+2 from yesterday"
-          trend="up"
+          value={todayAppointments.length}
+          trend="neutral"
           icon={<Calendar size={22} />}
         />
         <StatCard
           title="In Queue"
-          value={5}
-          change="3 new in last hour"
-          trend="up"
+          value={waitingTickets.length}
+          trend="neutral"
           icon={<Users size={22} />}
         />
         <StatCard
           title="Urgent Cases"
-          value={1}
-          change="Needs attention"
-          trend="down"
+          value={urgentCount}
+          trend={urgentCount > 0 ? "down" : "neutral"}
           icon={<AlertTriangle size={22} />}
         />
         <StatCard
           title="Completed Today"
-          value={3}
-          change="On track"
-          trend="up"
+          value={completedToday}
+          trend="neutral"
           icon={<CheckCircle size={22} />}
         />
       </div>
 
-      {/* Today's Queue */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -171,70 +167,79 @@ export default function DoctorDashboardPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-3 px-4 font-medium text-muted">#</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted">Patient Name</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted">Chief Complaint</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted">Triage Level</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted">Wait Time</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-muted">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {queue.map((patient) => {
-                  const triage = triageBadge[patient.triage];
-                  return (
-                    <tr
-                      key={patient.id}
-                      className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
-                    >
-                      <td className="py-3 px-4 text-muted">{patient.id}</td>
-                      <td className="py-3 px-4 font-medium text-foreground">
-                        {patient.name}
-                      </td>
-                      <td className="py-3 px-4 text-muted">{patient.complaint}</td>
-                      <td className="py-3 px-4">
-                        <Badge variant={triage.variant} size="sm">
-                          {triage.label}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 text-muted">
-                        <span className="flex items-center gap-1">
-                          <Clock size={14} /> {patient.waitTime}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center gap-1.5 text-amber-600 text-xs font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          Waiting
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <Link href={`/doctor/consultation/${patient.id}`}>
-                          <Button size="sm" variant="primary">
-                            <Play size={14} /> Start
-                          </Button>
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {loading ? (
+            <div className="py-10 text-center text-muted">Loading queue...</div>
+          ) : activeTickets.length === 0 ? (
+            <div className="py-10 text-center text-muted">
+              {/* Leave this blank for a new doctor. */}
+              No patients are waiting in your queue.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left py-3 px-4 font-medium text-muted">#</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted">Patient Name</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted">Chief Complaint</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted">Triage Level</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted">Wait Time</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted">Status</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeTickets.map((ticket) => {
+                    const appointment = appointmentById.get(ticket.appointment);
+                    const triage = triageBadge[ticket.triage_level] || triageBadge.normal;
+                    return (
+                      <tr
+                        key={ticket.id}
+                        className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                      >
+                        <td className="py-3 px-4 text-muted">{ticket.queue_number}</td>
+                        <td className="py-3 px-4 font-medium text-foreground">
+                          {appointment?.patient_name || "Patient"}
+                        </td>
+                        <td className="py-3 px-4 text-muted">
+                          {appointment?.reason || "No complaint recorded"}
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge variant={triage.variant} size="sm">
+                            {triage.label}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-muted">
+                          <span className="flex items-center gap-1">
+                            <Clock size={14} /> {ticket.estimated_wait_minutes} min
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1.5 text-amber-600 text-xs font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            {statusLabel[ticket.queue_status] || ticket.queue_status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <Link href={`/doctor/consultation/${ticket.appointment}`}>
+                            <Button size="sm" variant="primary">
+                              <Play size={14} /> Start
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Live AI assistant — quick way to test or use the model
-          without leaving the dashboard. */}
       <AITestPanel />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent AI Analyses */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -243,40 +248,13 @@ export default function DoctorDashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentAnalyses.map((analysis) => (
-                <div
-                  key={analysis.id}
-                  className="flex items-start gap-3 p-3 rounded-lg bg-gray-50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-foreground text-sm">
-                        {analysis.patientName}
-                      </span>
-                      <Badge
-                        variant={riskBadgeVariant[analysis.riskLevel]}
-                        size="sm"
-                      >
-                        {analysis.riskLevel === "danger"
-                          ? "High Risk"
-                          : analysis.riskLevel === "warning"
-                          ? "Moderate"
-                          : "Low Risk"}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted line-clamp-2">
-                      {analysis.summary}
-                    </p>
-                    <p className="text-xs text-muted/70 mt-1">{analysis.time}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="py-8 text-center text-muted">
+              {/* This fills only after the doctor runs an analysis. */}
+              No AI analyses yet. Case analyses will appear here after you run them.
             </div>
           </CardContent>
         </Card>
 
-        {/* Quick Actions */}
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
@@ -288,7 +266,7 @@ export default function DoctorDashboardPage() {
                   <Users size={20} className="text-primary" />
                   <div className="text-left">
                     <p className="font-medium">View Queue</p>
-                    <p className="text-xs text-muted">5 patients waiting</p>
+                    <p className="text-xs text-muted">{waitingTickets.length} waiting</p>
                   </div>
                 </Button>
               </Link>

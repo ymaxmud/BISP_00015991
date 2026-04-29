@@ -59,6 +59,7 @@ export default function DashboardLayout({
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
+    let frame: number | null = null;
     const token = localStorage.getItem("access_token");
     const rawRole = localStorage.getItem("user_role") as BackendRole | null;
     const userSection = sectionForRole(rawRole);
@@ -75,7 +76,15 @@ export default function DashboardLayout({
       return;
     }
 
-    setAuthorized(true);
+    frame = window.requestAnimationFrame(() => {
+      setAuthorized(true);
+    });
+
+    return () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
   }, [role, router]);
 
   if (!authorized) {

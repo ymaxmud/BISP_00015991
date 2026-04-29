@@ -11,13 +11,12 @@
  *      context and renders the LLM's risk assessment, alerts, and
  *      suggestions. This is the headline AI feature.
  *
- * Patient context is currently a static placeholder because the
- * backend's per-appointment encounter endpoint isn't wired in yet —
- * once it is, swap `PATIENT_CONTEXT` for a fetch keyed off the
- * `appointmentId` route param.
+ * The patient summary is loaded from the appointment/intake data for this
+ * visit. If something was not recorded, we show that plainly.
  */
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import {
   AlertTriangle,
   Brain,
@@ -29,21 +28,14 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
-import { ai, CaseAnalysisRecord } from "@/lib/api";
-
-// Until per-appointment encounter loading is wired up, we use this
-// canned context so the AI tab still has something realistic to chew on.
-const PATIENT_CONTEXT = {
-  name: "Sardor Umarov",
-  age: 36,
-  gender: "Male",
-  complaint: "Chest pain radiating to left arm, shortness of breath",
-  duration: "2 days",
-  severity: "severe",
-  allergies: ["Penicillin"],
-  medications: ["None"],
-  history: "Appendectomy 2015",
-};
+import {
+  ai,
+  ApiRecord,
+  AppointmentRecord,
+  CaseAnalysisRecord,
+  appointments,
+  intake,
+} from "@/lib/api";
 
 const RISK_BADGE: Record<string, "danger" | "warning" | "info" | "success"> = {
   critical: "danger",
@@ -53,16 +45,22 @@ const RISK_BADGE: Record<string, "danger" | "warning" | "info" | "success"> = {
 };
 
 export default function ConsultationPage() {
+  const params = useParams<{ appointmentId: string }>();
+  const appointmentId = Number(params.appointmentId);
   const [tab, setTab] = useState<"notes" | "prescriptions" | "ai">("notes");
+  const [appointment, setAppointment] = useState<AppointmentRecord | null>(null);
+  const [intakeForm, setIntakeForm] = useState<ApiRecord | null>(null);
+  const [loadingContext, setLoadingContext] = useState(true);
+  const [contextError, setContextError] = useState("");
   const [notes, setNotes] = useState({ assessment: "", plan: "" });
   const [meds, setMeds] = useState<
-    { name: string; dosage: string; schedule: string; days: number }[]
+    { name: string; dosage: string; schedule: string; days: string }[]
   >([]);
   const [medForm, setMedForm] = useState({
     name: "",
     dosage: "",
     schedule: "",
-    days: 14,
+    days: "",
   });
 
   // AI state
@@ -70,26 +68,80 @@ export default function ConsultationPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    async function loadContext() {
+      // The URL gives us the appointment id; this loads the visit details.
+      setLoadingContext(true);
+      setContextError("");
+      try {
+        const [appointmentData, intakeData] = await Promise.all([
+          appointments.get(appointmentId),
+          intake.get(appointmentId).catch(() => []),
+        ]);
+        if (!active) return;
+        setAppointment(appointmentData);
+        setIntakeForm(intakeData[0] || null);
+      } catch (err: unknown) {
+        if (active) {
+          setContextError(err instanceof Error ? err.message : "Could not load appointment context.");
+        }
+      } finally {
+        if (active) setLoadingContext(false);
+      }
+    }
+    if (Number.isFinite(appointmentId)) void loadContext();
+    return () => {
+      active = false;
+    };
+  }, [appointmentId]);
+
+  const patientContext = useMemo(() => {
+    // One small object for the page to read from. Missing fields stay obvious.
+    const symptoms = String(intakeForm?.symptoms || appointment?.reason || "").trim();
+    const severity = String(intakeForm?.severity || "").trim();
+    return {
+      name: appointment?.patient_name || "Patient",
+      complaint: symptoms || "No complaint recorded",
+      duration: String(intakeForm?.duration || "Not recorded"),
+      severity: severity || "not recorded",
+      allergies: String(intakeForm?.allergies_text || "").trim(),
+      medications: String(intakeForm?.medications_text || "").trim(),
+      history: String(intakeForm?.history_text || "").trim(),
+    };
+  }, [appointment, intakeForm]);
+
+  const patientInitials = patientContext.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "P";
+
   const addMed = () => {
+    // Local draft for this screen. Saving prescriptions can be wired here later.
     if (!medForm.name) return;
     setMeds([...meds, medForm]);
-    setMedForm({ name: "", dosage: "", schedule: "", days: 14 });
+    setMedForm({ name: "", dosage: "", schedule: "", days: "" });
   };
 
   const runAnalysis = async () => {
+    // Run AI only after the appointment has loaded.
+    if (!appointment) {
+      setAiError("Load a real appointment before running AI analysis.");
+      return;
+    }
     setAiLoading(true);
     setAiError(null);
     try {
       const result = await ai.caseAnalysis({
-        patient_name: PATIENT_CONTEXT.name,
-        age: PATIENT_CONTEXT.age,
-        gender: PATIENT_CONTEXT.gender,
-        symptoms: PATIENT_CONTEXT.complaint,
-        duration: PATIENT_CONTEXT.duration,
-        severity: PATIENT_CONTEXT.severity,
-        history: PATIENT_CONTEXT.history,
-        allergies: PATIENT_CONTEXT.allergies.join(", "),
-        medications: PATIENT_CONTEXT.medications.join(", "),
+        patient_name: patientContext.name,
+        symptoms: patientContext.complaint,
+        duration: patientContext.duration,
+        severity: patientContext.severity,
+        history: patientContext.history,
+        allergies: patientContext.allergies,
+        medications: patientContext.medications,
       });
       setAiResult(result);
     } catch (err) {
@@ -116,17 +168,22 @@ export default function ConsultationPage() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6 flex items-center justify-between pl-12 md:pl-0">
         <div className="flex items-center gap-4 pl-3 md:pl-3">
           <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center font-bold text-primary">
-            SU
+            {patientInitials}
           </div>
           <div>
-            <h1 className="font-bold text-secondary">{PATIENT_CONTEXT.name}</h1>
+            <h1 className="font-bold text-secondary">{patientContext.name}</h1>
             <p className="text-sm text-muted">
-              {PATIENT_CONTEXT.age}y, {PATIENT_CONTEXT.gender} ·{" "}
-              {PATIENT_CONTEXT.complaint}
+              {/* Intake complaint wins; appointment reason is the fallback. */}
+              {loadingContext ? "Loading appointment context..." : patientContext.complaint}
             </p>
+            {contextError && <p className="text-xs text-amber-600 mt-1">{contextError}</p>}
           </div>
         </div>
-        <Badge variant="danger">Urgent</Badge>
+        {patientContext.severity !== "not recorded" && (
+          <Badge variant={patientContext.severity === "critical" || patientContext.severity === "severe" ? "danger" : "warning"}>
+            {patientContext.severity}
+          </Badge>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -135,31 +192,31 @@ export default function ConsultationPage() {
           <h2 className="font-semibold text-secondary">Patient Summary</h2>
           <div>
             <p className="text-xs text-muted uppercase mb-1">Chief Complaint</p>
-            <p className="text-sm text-secondary">{PATIENT_CONTEXT.complaint}</p>
+            <p className="text-sm text-secondary">{patientContext.complaint}</p>
           </div>
           <div className="flex gap-4">
             <div>
               <p className="text-xs text-muted uppercase mb-1">Duration</p>
-              <p className="text-sm">{PATIENT_CONTEXT.duration}</p>
+              <p className="text-sm">{patientContext.duration}</p>
             </div>
             <div>
               <p className="text-xs text-muted uppercase mb-1">Severity</p>
-              <Badge variant="danger" size="sm">
-                {PATIENT_CONTEXT.severity}
+              <Badge variant={patientContext.severity === "not recorded" ? "default" : "warning"} size="sm">
+                {patientContext.severity}
               </Badge>
             </div>
           </div>
           <div>
             <p className="text-xs text-muted uppercase mb-1">Allergies</p>
             <div className="flex gap-1 flex-wrap">
-              {PATIENT_CONTEXT.allergies.map((a) => (
+              {patientContext.allergies ? patientContext.allergies.split(",").map((a) => (
                 <span
                   key={a}
                   className="px-2 py-1 bg-red-50 text-red-700 text-xs rounded-md font-medium"
                 >
-                  {a}
+                  {a.trim()}
                 </span>
-              ))}
+              )) : <span className="text-sm text-muted">Not recorded</span>}
             </div>
           </div>
           <div>
@@ -167,12 +224,12 @@ export default function ConsultationPage() {
               Current Medications
             </p>
             <p className="text-sm text-secondary">
-              {PATIENT_CONTEXT.medications.join(", ")}
+              {patientContext.medications || "Not recorded"}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted uppercase mb-1">Medical History</p>
-            <p className="text-sm text-secondary">{PATIENT_CONTEXT.history}</p>
+            <p className="text-sm text-secondary">{patientContext.history || "Not recorded"}</p>
           </div>
         </div>
 
@@ -263,7 +320,7 @@ export default function ConsultationPage() {
                     type="number"
                     value={medForm.days}
                     onChange={(e) =>
-                      setMedForm({ ...medForm, days: +e.target.value })
+                      setMedForm({ ...medForm, days: e.target.value })
                     }
                     placeholder="Days"
                     className="px-3 py-2 border border-gray-200 rounded-lg outline-none focus:border-primary text-sm"
@@ -285,7 +342,8 @@ export default function ConsultationPage() {
                         <div>
                           <span className="font-medium text-sm">{m.name}</span>
                           <span className="text-sm text-muted ml-2">
-                            {m.dosage} · {m.schedule} · {m.days}d
+                            {m.dosage} · {m.schedule}
+                            {m.days ? ` · ${m.days}d` : ""}
                           </span>
                         </div>
                       </div>

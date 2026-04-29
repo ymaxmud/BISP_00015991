@@ -33,8 +33,10 @@ export default function ClinicRegisterPage() {
   const [confirm, setConfirm] = useState("");
 
   // Step 2 — clinic info
+  // Let the admin choose. If we preselect "clinic", hospitals can be saved
+  // with the wrong type before anyone notices.
   const [clinicName, setClinicName] = useState("");
-  const [clinicType, setClinicType] = useState("clinic");
+  const [clinicType, setClinicType] = useState("");
   const [clinicCity, setClinicCity] = useState("");
   const [clinicAddress, setClinicAddress] = useState("");
   const [clinicPhone, setClinicPhone] = useState("");
@@ -42,16 +44,13 @@ export default function ClinicRegisterPage() {
   const [clinicDescription, setClinicDescription] = useState("");
 
   // Step 3 — operational
+  // Working hours should come from the clinic. Blank means blank.
   const [departments, setDepartments] = useState<string[]>([""]);
-  const [workingHoursText, setWorkingHoursText] = useState(
-    "Mon–Sat 08:00-20:00"
-  );
-
-  // Step 4 — doctor seats
-  const [doctorEmails, setDoctorEmails] = useState<string[]>([""]);
+  const [workingHoursText, setWorkingHoursText] = useState("");
 
   // Step 5 — subscription
-  const [planCode, setPlanCode] = useState("clinic");
+  // Plan is not guessed. The admin has to choose it before payment.
+  const [planCode, setPlanCode] = useState("");
 
   // Step 6 — mock payment
   const [cardHolder, setCardHolder] = useState("");
@@ -92,8 +91,12 @@ export default function ClinicRegisterPage() {
     }
     if (s === 1) {
       if (!clinicName || !clinicCity) return "Clinic name and city required.";
+      if (!clinicType) return "Choose the clinic type.";
     }
-    if (s === 5 && planCode !== "free_doctor") {
+    if (s === 4 && !planCode) {
+      return "Choose a subscription plan.";
+    }
+    if (s === 5 && selectedPlan && Number(selectedPlan.price_monthly) > 0) {
       if (!cardHolder || cardNumber.length < 12 || !cardExpiry || cardCvc.length < 3)
         return "Please fill in the mock card details.";
     }
@@ -116,10 +119,15 @@ export default function ClinicRegisterPage() {
       setError("Please accept the terms.");
       return;
     }
+    if (!planCode) {
+      setError("Choose a subscription plan.");
+      setStep(4);
+      return;
+    }
     setError("");
     setLoading(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         first_name: firstName,
         last_name: lastName,
         email,
@@ -133,13 +141,15 @@ export default function ClinicRegisterPage() {
         clinic_email: clinicEmail,
         clinic_description: clinicDescription,
         departments: departments.filter((d) => d.trim()),
-        working_hours: { text: workingHoursText },
-        initial_doctor_emails: doctorEmails.filter((e) => e.trim()),
         plan_code: planCode,
         payment_card_last4: cardNumber.slice(-4),
         admin_permissions: permissions,
         agreed_to_terms: agreed,
       };
+      // Only save operational details that were typed into the form.
+      if (workingHoursText.trim()) {
+        payload.working_hours = { text: workingHoursText.trim() };
+      }
       const data = await auth.registerClinic(payload);
       localStorage.setItem("access_token", data.access);
       localStorage.setItem("refresh_token", data.refresh);
@@ -231,6 +241,7 @@ export default function ClinicRegisterPage() {
                 onChange={(e) => setClinicType(e.target.value)}
                 className={inputCls}
               >
+                <option value="">Select type</option>
                 <option value="clinic">Clinic</option>
                 <option value="hospital">Hospital</option>
               </select>
@@ -327,41 +338,15 @@ export default function ClinicRegisterPage() {
 
       {step === 3 && (
         <div className="space-y-4">
-          <p className="text-sm text-muted">
-            Invite initial doctors by email. They will receive access once you
-            finalize their profiles from the admin dashboard.
-          </p>
-          {doctorEmails.map((em, i) => (
-            <div key={i} className="flex gap-2">
-              <input
-                type="email"
-                placeholder="doctor@example.com"
-                value={em}
-                onChange={(e) => {
-                  const c = [...doctorEmails];
-                  c[i] = e.target.value;
-                  setDoctorEmails(c);
-                }}
-                className={inputCls}
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  setDoctorEmails(doctorEmails.filter((_, idx) => idx !== i))
-                }
-                className="text-red-500"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setDoctorEmails([...doctorEmails, ""])}
-            className="inline-flex items-center gap-1 text-sm text-primary"
-          >
-            <Plus size={14} /> Add doctor
-          </button>
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+            {/* This is shown to the admin because it is an important product rule:
+                doctors are added later with their full details, not made from a
+                bare email during clinic signup. */}
+            Doctor profiles are not created during clinic signup. This avoids
+            empty doctor accounts with generated names or incomplete public
+            profiles. After your clinic account is created, open the Doctors
+            page and add each doctor with their real details.
+          </div>
         </div>
       )}
 
@@ -515,12 +500,8 @@ export default function ClinicRegisterPage() {
             value={departments.filter(Boolean).join(", ") || "—"}
           />
           <Summary
-            label="Doctors invited"
-            value={
-              doctorEmails.filter((e) => e.trim()).length
-                ? doctorEmails.filter(Boolean).join(", ")
-                : "None"
-            }
+            label="Doctor setup"
+            value="Add doctors after signup from the clinic dashboard."
           />
           <label className="flex items-center gap-2 text-sm mt-2">
             <input
